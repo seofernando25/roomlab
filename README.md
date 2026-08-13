@@ -108,3 +108,8 @@ bun run visual:qa # optional OpenRouter visual comparison against references/
 The smoke test exercises camera modes, morph modes, floor hover, click-to-walk, authored walking, click-to-sit, Play/Edit switching, the Furni Explorer, seated furniture pickup/dragging, Pixel Transport during seated chair rotation, panning, zoom, adding furni, rotation, and WebGL sizing. Browser console/page errors fail the smoke pass.
 
 Interaction screenshots are written under `artifacts/`, including `room.png`, `room-editor.png`, `furni-explorer.png`, `avatar-walk.png`, `avatar-sit.png`, `avatar-sit-furni-hover.png`, and `avatar-sit-furni-rotate-transport.png`.
+
+
+## Deployment
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the Bun/Docker/Coolify production contract.
