@@ -1,0 +1,35 @@
+{
+  "name": "habbo-clone",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run scripts/dev.ts",
+    "dev:client": "vite --host 127.0.0.1",
+    "dev:server": "bun --watch server/index.ts",
+    "server": "bun run server/index.ts",
+    "start": "NODE_ENV=production bun run server/index.ts",
+    "build": "tsc --noEmit && vite build",
+    "test": "bun test",
+    "smoke": "bun run scripts/smoke.ts",
+    "visual:qa": "bun run scripts/compare-visuals.ts",
+    "visual:qa:fresh": "bun run smoke && bun run visual:qa",
+    "visual:qa:gate": "VISUAL_QA_GATE=1 bun run visual:qa",
+    "check": "bun run test && bun run build",
+    "verify": "bun run check && bun run smoke"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/three": "^0.185.4",
+    "playwright-core": "^1.62.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  },
+  "dependencies": {
+    "@elysia/openapi": "^1.4.15",
+    "@elysia/static": "^1.4.11",
+    "elysia": "^1.4.29",
+    "lit": "^3.3.3",
+    "three": "^0.185.1"
+  }
+}

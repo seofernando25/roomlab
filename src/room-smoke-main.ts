@@ -1,0 +1,1 @@
+import './ui/habbo-game';
