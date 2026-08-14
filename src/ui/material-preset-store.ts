@@ -31,8 +31,9 @@ export function saveMaterialPreset(name: string, style: MaterialStyle): readonly
   const parsed = parseMaterialStyle(style);
   if (!parsed) throw new Error('This material recipe is not valid.');
   const prior = loadSavedMaterialPresets();
+  if (prior.length >= MAX_SAVED) throw new Error(`You can save up to ${MAX_SAVED} patterns. Delete one before saving another.`);
   const entry: SavedMaterialPreset = { id: crypto.randomUUID(), name: normalized, style: parsed, createdAt: new Date().toISOString() };
-  const next = [entry, ...prior].slice(0, MAX_SAVED);
+  const next = [entry, ...prior];
   persist(next);
   return next;
 }

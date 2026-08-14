@@ -33,7 +33,13 @@ export function applyMaterialStudioTarget(
     store.dispatchEditor({ type: 'tool/set', tool: 'place-prototype' });
     return { pendingItemId: target.itemInstanceId ?? null, message: `Styled ${getCatalogueObject(target.prototypeId).label} ready to place.` };
   }
+  // Online appearance is authoritative because permanent styling may be rejected by
+  // ownership rules. Avoid leaving a rejected optimistic appearance in local state.
+  if (network) {
+    network.setAppearance(target.entityId, appearance);
+    return {};
+  }
   const result = store.dispatch({ type: 'component/set', id: target.entityId, component: 'appearance', value: appearance });
-  if (result.accepted) network?.setAppearance(target.entityId, appearance);
+  if (!result.accepted) return { message: 'That material change could not be applied.' };
   return {};
 }

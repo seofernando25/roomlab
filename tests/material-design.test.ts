@@ -12,7 +12,7 @@ import { materialPreset } from '../src/domain/material-presets';
 import { validateWorldState } from '../src/domain/world-validation';
 import { createFurniEntity } from '../src/domain/world-state';
 import { disposeRenderTree } from '../src/rendering/dispose-render-tree';
-import { materialProgramTexture } from '../src/rendering/material-program-texture';
+import { materialProgramTexture, releaseMaterialProgramTexture } from '../src/rendering/material-program-texture';
 import { materialSlotsInVisual } from '../src/rendering/object-material-appearance';
 import { createObjectVisual } from '../src/rendering/object-factory';
 import { parseRoomClientMessage } from '../server/protocol';
@@ -48,6 +48,21 @@ describe('safe programmable material recipes', () => {
     expect(Array.from(first.image.data as Uint8Array)).toEqual(Array.from(second.image.data as Uint8Array));
     expect(Array.from(first.image.data as Uint8Array)).not.toEqual(Array.from(changed.image.data as Uint8Array));
     first.dispose(); second.dispose(); changed.dispose();
+  });
+
+  test('shared recipe textures are released after the final live reference', () => {
+    const first = materialProgramTexture(linen, true);
+    const second = materialProgramTexture(linen, true);
+    let disposals = 0;
+    first.addEventListener('dispose', () => { disposals += 1; });
+    expect(second).toBe(first);
+    releaseMaterialProgramTexture(first);
+    expect(disposals).toBe(0);
+    releaseMaterialProgramTexture(second);
+    expect(disposals).toBe(1);
+    const replacement = materialProgramTexture(linen, true);
+    expect(replacement).not.toBe(first);
+    releaseMaterialProgramTexture(replacement);
   });
 });
 

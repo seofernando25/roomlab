@@ -32,10 +32,10 @@ export function materialSlotsInVisual(root: THREE.Object3D): readonly string[] {
 
 function customizedMaterial(material: THREE.Material, style: AppearanceComponent['materials'][string], cacheTextures: boolean): THREE.Material {
   const copy = material.clone();
-  const texture = materialProgramTexture(style, cacheTextures);
   if (copy instanceof THREE.MeshToonMaterial || copy instanceof THREE.MeshBasicMaterial
     || copy instanceof THREE.MeshLambertMaterial || copy instanceof THREE.MeshPhongMaterial
     || copy instanceof THREE.MeshStandardMaterial) {
+    const texture = materialProgramTexture(style, cacheTextures);
     copy.color.set(0xffffff);
     copy.map = texture;
     copy.needsUpdate = true;

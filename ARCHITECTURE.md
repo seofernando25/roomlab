@@ -180,7 +180,7 @@ Do not put Three.js materials/passes into domain state.
 
 Furniture appearance is authoritative **recipe data**, never a Three.js material, shader source, script, URL, or uploaded executable asset. A prototype declares semantic `renderable.materialSlots`; an entity may carry an `appearance.materials` map that assigns a validated `MaterialStyle` to those slots. Owned-item persistence mirrors the same canonical appearance so pickup and Marketplace transfer preserve identity.
 
-`material-design.ts` defines the bounded recipe language and parser. `material-program-texture.ts` is the rendering adapter that compiles that data into a nearest-filtered Three.js texture. `object-material-appearance.ts` applies recipes only to meshes tagged with the corresponding semantic slot. New furniture authors should tag geometry and declare slot metadata rather than branch in Material Studio or `RoomScene`.
+`material-design.ts` defines the bounded recipe language and parser. `material-program-texture.ts` is the rendering adapter that compiles that data into a nearest-filtered Three.js texture. Shared recipe textures are reference-counted and must be released with the render tree so experimentation cannot grow an unbounded GPU cache. `object-material-appearance.ts` applies recipes only to meshes tagged with the corresponding semantic slot. New furniture authors should tag geometry and declare slot metadata rather than branch in Material Studio or `RoomScene`.
 
 The recipe language intentionally remains finite and deterministic. Add new reusable layer primitives to the domain parser + renderer together; do not add an "escape hatch" for arbitrary JS/GLSL. Every authoritative recipe addition needs parser bounds, deterministic rendering, protocol validation, and tests.
 

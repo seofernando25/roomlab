@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { disposeTransientMaterialTexture } from './material-program-texture';
+import { releaseMaterialProgramTexture } from './material-program-texture';
 
 export function disposeRenderTree(root: THREE.Object3D): void {
   root.traverse((object) => {
@@ -8,7 +8,7 @@ export function disposeRenderTree(root: THREE.Object3D): void {
     const materials = Array.isArray(object.material) ? object.material : [object.material];
     for (const material of materials) {
       const map = materialMap(material);
-      if (map) disposeTransientMaterialTexture(map);
+      if (map) releaseMaterialProgramTexture(map);
       if (!material.userData.sharedCatalogueResource) material.dispose();
     }
   });

@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import type { MaterialLayer, MaterialStyle } from '../domain/material-design';
 
-const liveTextureCache = new Map<string, THREE.DataTexture>();
+interface SharedTextureEntry { readonly texture: THREE.DataTexture; references: number; }
+const liveTextureCache = new Map<string, SharedTextureEntry>();
 
 export function materialProgramTexture(style: MaterialStyle, cache = true): THREE.DataTexture {
   const key = JSON.stringify(style);
   const existing = cache ? liveTextureCache.get(key) : undefined;
-  if (existing) return existing;
+  if (existing) { existing.references += 1; return existing.texture; }
   const { program } = style;
   const size = program.resolution;
   const data = new Uint8Array(size * size * 4);
@@ -34,12 +35,24 @@ export function materialProgramTexture(style: MaterialStyle, cache = true): THRE
   texture.needsUpdate = true;
   texture.userData.materialRecipeTexture = true;
   texture.userData.sharedMaterialRecipe = cache;
-  if (cache) liveTextureCache.set(key, texture);
+  if (cache) {
+    texture.userData.materialRecipeKey = key;
+    liveTextureCache.set(key, { texture, references: 1 });
+  }
   return texture;
 }
 
-export function disposeTransientMaterialTexture(texture: THREE.Texture | null): void {
-  if (texture?.userData.materialRecipeTexture && !texture.userData.sharedMaterialRecipe) texture.dispose();
+export function releaseMaterialProgramTexture(texture: THREE.Texture | null): void {
+  if (!texture?.userData.materialRecipeTexture) return;
+  if (!texture.userData.sharedMaterialRecipe) { texture.dispose(); return; }
+  const key = texture.userData.materialRecipeKey;
+  if (typeof key !== 'string') return;
+  const entry = liveTextureCache.get(key);
+  if (!entry || entry.texture !== texture) return;
+  entry.references = Math.max(0, entry.references - 1);
+  if (entry.references > 0) return;
+  liveTextureCache.delete(key);
+  texture.dispose();
 }
 
 function layerCoverage(layer: MaterialLayer, x: number, y: number): number {

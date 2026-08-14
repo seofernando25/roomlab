@@ -129,7 +129,7 @@ export class LiveRoomCommands {
     const entity = entityById(room.store.state, entityId);
     if (!entity || getEntityPrototype(entity.prototypeId).kind !== 'furni') throw new Error('That object cannot be customized.');
     const itemOwnerId = placedItemOwner(room.roomId, entityId);
-    if (itemOwnerId && itemOwnerId !== member.userId && member.role !== 'owner') throw new Error('Only the item owner or room owner can restyle that item.');
+    if (itemOwnerId && itemOwnerId !== member.userId) throw new Error('Only the item owner can permanently restyle that item.');
     if (appearance) {
       const appearanceError = materialAppearanceError(entity.prototypeId, appearance);
       if (appearanceError) throw new Error(appearanceError);

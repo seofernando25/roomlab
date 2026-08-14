@@ -149,8 +149,25 @@ try {
   const styledChairPoint=await game(alice).evaluate((element:any)=>element.debugScreenPointForPrototype?.('chair')) as {x:number;y:number}|null;
   if(!styledChairPoint)throw new Error('materials: styled chair did not produce a projected screen point');
   await alice.mouse.click(styledChairPoint.x,styledChairPoint.y);const selection=game(alice).locator('selection-inspector');await selection.waitFor({state:'visible'});await selection.locator('.style').click();
-  const restyleStudio=game(alice).locator('material-studio');await restyleStudio.waitFor({state:'visible'});await restyleStudio.locator('.slot').filter({hasText:'Cushion'}).click();await restyleStudio.locator('.preset').filter({hasText:'Navy Pinstripe'}).click();await restyleStudio.locator('.apply').click();
+  const restyleStudio=game(alice).locator('material-studio');await restyleStudio.waitFor({state:'visible'});
+  const patternName=restyleStudio.locator('input[aria-label="Pattern name"]');await patternName.fill('Shortcut Guard');await patternName.press('Backspace');await alice.waitForTimeout(80);
+  if(!(await canvasData(alice)).objects.split(',').includes('chair'))errors.push('materials: Backspace in a pattern-name input picked up the selected chair');
+  await restyleStudio.locator('.slot').filter({hasText:'Cushion'}).click();await restyleStudio.locator('.preset').filter({hasText:'Navy Pinstripe'}).click();await restyleStudio.locator('.apply').click();
   await waitFor(async()=>{const response=await api<{items:{id:string;appearance:any}[]}>(alice,'/api/inventory');const item=response.items.find(entry=>entry.id===styledChair?.id);return Boolean(item?.appearance?.materials?.upholstery&&item?.appearance?.materials?.cushion);},8_000,'placed item restyle persistence');
+
+  // Build rights do not grant permission to mutate another player's persistent collectible appearance.
+  const authoritativeStyle=(await api<{items:{id:string;appearance:any}[]}>(alice,'/api/inventory')).items.find(item=>item.id===styledChair?.id)?.appearance;
+  const temporaryEditor=await api<{editor:{userId:string}}>(alice,`/api/rooms/${roomId}/editors`,{method:'POST',body:{username:bobName}});
+  await waitFor(async()=>await game(bob).locator('.mode-btn').count()===1,5_000,'temporary editor rights for material ownership test');
+  await enterEdit(bob);if(await game(bob).locator('catalogue-explorer').count())await game(bob).locator('.catalogue-open').click();
+  const bobChairPoint=await game(bob).evaluate((element:any)=>element.debugScreenPointForPrototype?.('chair')) as {x:number;y:number}|null;
+  if(!bobChairPoint)throw new Error('materials: rights user could not target styled chair');
+  await bob.mouse.click(bobChairPoint.x,bobChairPoint.y);const bobSelection=game(bob).locator('selection-inspector');await bobSelection.waitFor({state:'visible'});await bobSelection.locator('.style').click();
+  const bobStudio=game(bob).locator('material-studio');await bobStudio.waitFor({state:'visible'});await bobStudio.locator('.preset').filter({hasText:'Pixel Dots'}).click();await bobStudio.locator('.apply').click();
+  await waitFor(async()=>((await game(bob).locator('.toast').textContent())??'').includes('Only the item owner'),5_000,'unauthorized permanent restyle rejection');
+  const styleAfterAttack=(await api<{items:{id:string;appearance:any}[]}>(alice,'/api/inventory')).items.find(item=>item.id===styledChair?.id)?.appearance;
+  if(JSON.stringify(styleAfterAttack)!==JSON.stringify(authoritativeStyle))errors.push('materials: delegated editor changed another player owned-item appearance');
+  await leaveEdit(bob);await api(alice,`/api/rooms/${roomId}/editors/${temporaryEditor.editor.userId}`,{method:'DELETE'});await waitFor(async()=>await game(bob).locator('.mode-btn').count()===0,5_000,'temporary material-test rights revoke');
 
   // Both cameras are still at the same default view. Find the visible chair in Play mode.
   await leaveEdit(alice);

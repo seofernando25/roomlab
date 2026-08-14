@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { AppearanceComponent } from '../domain/material-design';
-import { disposeTransientMaterialTexture } from './material-program-texture';
+import { releaseMaterialProgramTexture } from './material-program-texture';
 import { createObjectVisual } from './object-factory';
 
 const THUMBNAIL_SIZE = 112;
@@ -82,7 +82,7 @@ function disposePreviewObject(root: THREE.Object3D): void {
     object.geometry.dispose();
     const materials = Array.isArray(object.material) ? object.material : [object.material];
     for (const material of materials) {
-      if ('map' in material) disposeTransientMaterialTexture((material as THREE.MeshBasicMaterial).map);
+      if ('map' in material) releaseMaterialProgramTexture((material as THREE.MeshBasicMaterial).map);
       if (!material.userData.sharedCatalogueResource) material.dispose();
     }
   });

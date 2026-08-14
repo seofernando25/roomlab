@@ -27,6 +27,7 @@ export class RoomKeyboardControls {
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (isEditableKeyboardEvent(event)) return;
     if (event.code === 'KeyQ' || event.code === 'KeyE') {
       if (event.repeat && this.camera.turnMode !== 'free') return;
       this.camera.beginTurn(event.code === 'KeyQ' ? -1 : 1);
@@ -63,4 +64,10 @@ export class RoomKeyboardControls {
       if (result.accepted) this.network?.pickup(entity.id);
     }
   }
+}
+
+function isEditableKeyboardEvent(event: KeyboardEvent): boolean {
+  return event.composedPath().some((target) => target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
+    || (target instanceof HTMLElement && target.isContentEditable));
 }

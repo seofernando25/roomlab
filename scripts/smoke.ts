@@ -235,6 +235,12 @@ try {
   await chairCard.locator('.style-action').click();
   const materialStudio = host.locator('material-studio');
   await materialStudio.waitFor({ state: 'visible' });
+  await page.waitForTimeout(20);
+  const studioA11y = await materialStudio.evaluate((element: any) => ({
+    role: element.getAttribute('role'), modal: element.getAttribute('aria-modal'),
+    closeFocused: Boolean(element.shadowRoot?.activeElement?.classList?.contains('close-studio')),
+  }));
+  if (studioA11y.role !== 'dialog' || studioA11y.modal !== 'true' || !studioA11y.closeFocused) errors.push('Material Studio: modal semantics or initial focus are missing');
   if (await materialStudio.locator('.slot').count() !== 3) errors.push('Material Studio: Club Chair should expose three semantic parts');
   await materialStudio.locator('.preset').filter({ hasText: 'Fine Linen' }).click();
   await materialStudio.locator('.saved-row input').fill('QA Linen');

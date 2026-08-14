@@ -93,7 +93,7 @@ Recipes use a bounded base color plus composable procedural layers: stripes, che
 
 The UI leads with curated styles such as Fine Linen, Walnut Grain, Studio Charcoal, Clean Ivory, and natural foliage; layer controls remain available underneath for custom patterns. Users may save up to 24 named material recipes in **My Patterns** in local browser storage. Those saved recipe shortcuts are browser-local, but once a recipe is applied to an owned furniture item its canonical appearance belongs to that exact item instance: pickup, room changes, Marketplace listing, and Marketplace transfer retain it.
 
-When several owned items share a prototype, the Catalogue exposes the exact owned copy (`Styled` or `Original`) rather than treating them as interchangeable. A room editor may move another player's item, but permanent restyling of an owned item is restricted to the item owner or room owner. Built-in room furniture that has no owned item instance may use room-local styling.
+When several owned items share a prototype, the Catalogue exposes the exact owned copy (`Styled` or `Original`) rather than treating them as interchangeable. A room editor may move another player's item, but permanent restyling of an owned item is restricted to that item's owner. A room owner can still return another player's placed item to its owner. Built-in room furniture that has no owned item instance may use room-local styling.
 
 ## Rendering
 

@@ -45,7 +45,11 @@ export class MaterialStudio extends LitElement {
     this.actionLabel = 'Apply';
   }
 
-  override connectedCallback(): void { super.connectedCallback(); this.#saved = loadSavedMaterialPresets(); }
+  override connectedCallback(): void {
+    super.connectedCallback(); this.#saved = loadSavedMaterialPresets();
+    this.setAttribute('role', 'dialog'); this.setAttribute('aria-modal', 'true'); this.setAttribute('aria-label', 'Material Studio');
+  }
+  override firstUpdated(): void { queueMicrotask(() => this.renderRoot.querySelector<HTMLButtonElement>('.close-studio')?.focus()); }
   override willUpdate(): void {
     if (this.prototypeId === this.#sourcePrototype && this.appearance === this.#sourceAppearance) return;
     this.#sourcePrototype = this.prototypeId;
@@ -61,8 +65,8 @@ export class MaterialStudio extends LitElement {
     const slots = definition.renderable.materialSlots ?? [];
     const style = this.#draft.materials[this.#slotId];
     const layer = style?.program.layers[this.#layerIndex];
-    return html`<hotel-panel heading="Material Studio" tone="blue">
-      <button slot="actions" class="small-action ghost" @click=${this.close}>×</button>
+    return html`<div class="backdrop"><hotel-panel heading="Material Studio" tone="blue" @keydown=${this.onKeyDown}>
+      <button slot="actions" class="small-action ghost close-studio" aria-label="Close Material Studio" @click=${this.close}>×</button>
       <div class="studio">
         <aside class="preview-column">
           <div class="preview"><catalogue-object-preview .prototypeId=${this.prototypeId} .appearance=${this.normalizedDraft()}></catalogue-object-preview></div>
@@ -95,23 +99,23 @@ export class MaterialStudio extends LitElement {
             <section class="section">
               <div class="section-head"><div class="section-title">Recipe layers</div><div class="section-note">Applied top to bottom</div></div>
               <div class="layers">${style.program.layers.map((entry, index) => html`<button class="layer ${index === this.#layerIndex ? 'active' : ''}" @click=${() => { this.#layerIndex = index; this.requestUpdate(); }}>${index + 1}. ${layerName(entry.kind)}</button>`)}</div>
-              <div class="add-layer"><select .value=${this.#addKind} @change=${(e: Event) => { this.#addKind = (e.currentTarget as HTMLSelectElement).value as MaterialLayerKind; }}>${MATERIAL_LAYER_KINDS.map((kind) => html`<option value=${kind}>${layerName(kind)}</option>`)}</select><button class="small-action" @click=${this.addLayer}>+ Add layer</button></div>
+              <div class="add-layer"><select aria-label="Layer type" .value=${this.#addKind} @change=${(e: Event) => { this.#addKind = (e.currentTarget as HTMLSelectElement).value as MaterialLayerKind; }}>${MATERIAL_LAYER_KINDS.map((kind) => html`<option value=${kind}>${layerName(kind)}</option>`)}</select><button class="small-action" @click=${this.addLayer}>+ Add layer</button></div>
               ${layer ? html`<div class="layer-editor">${this.renderLayer(style, layer)}<div class="layer-actions"><button class="small-action danger" @click=${this.removeLayer}>Remove layer</button></div></div>` : html`<div class="object-subtitle">No layers yet. A solid base color is a valid clean material.</div>`}
             </section>
 
             <section class="section">
               <div class="section-head"><div class="section-title">My patterns</div><div class="section-note">Saved in this browser</div></div>
-              <div class="saved-row"><input maxlength="32" placeholder="Pattern name" .value=${this.#saveName} @input=${(e: Event) => { this.#saveName = (e.currentTarget as HTMLInputElement).value; }}><button class="small-action" @click=${this.saveCurrent}>Save</button></div>
+              <div class="saved-row"><input maxlength="32" placeholder="Pattern name" aria-label="Pattern name" .value=${this.#saveName} @input=${(e: Event) => { this.#saveName = (e.currentTarget as HTMLInputElement).value; }}><button class="small-action" @click=${this.saveCurrent}>Save</button></div>
               ${this.#saved.length ? html`<div class="saved-list">${this.#saved.map((preset) => html`<span class="saved"><button @click=${() => this.useStyle(preset.style)}>${preset.name}</button><button class="delete" title="Delete saved pattern" @click=${() => this.deleteSaved(preset.id)}>×</button></span>`)}</div>` : nothing}
             </section>
           ` : html`<section class="section"><div class="object-subtitle">This part is using the furniture’s original authored material.</div><button class="action primary" style="margin-top:8px" @click=${this.startRecommended}>Customize this part</button></section>`}
 
           <details class="advanced"><summary>Recipe data · portable & deterministic</summary><div class="advanced-body"><div class="object-subtitle">Recipes contain bounded data only—no JavaScript, shader code, URLs, or uploaded executable content.</div><pre class="recipe">${JSON.stringify(style ?? null, null, 2)}</pre></div></details>
-          ${this.#message ? html`<div class="message">${this.#message}</div>` : nothing}
+          ${this.#message ? html`<div class="message" role="status" aria-live="polite">${this.#message}</div>` : nothing}
         </main>
       </div>
       <div class="footer"><div class="footer-group"><button class="action secondary" @click=${this.resetAll}>Reset all</button><button class="action secondary" @click=${this.close}>Cancel</button></div><button class="action primary apply" @click=${this.apply}>${this.actionLabel}</button></div>
-    </hotel-panel>`;
+    </hotel-panel></div>`;
   }
 
   private renderLayer(style: MaterialStyle, layer: MaterialLayer) {
@@ -146,6 +150,17 @@ export class MaterialStudio extends LitElement {
   private normalizedDraft(): AppearanceComponent | null { const parsed = parseAppearanceComponent(this.#draft); return parsed && Object.keys(parsed.materials).length ? parsed : null; }
   private apply = (): void => { this.dispatchEvent(new CustomEvent('material-studio-apply', { detail: { appearance: this.normalizedDraft() }, bubbles: true, composed: true })); };
   private readonly close = (): void => { this.dispatchEvent(new CustomEvent('material-studio-close', { bubbles: true, composed: true })); };
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    event.stopPropagation();
+    if (event.key === 'Escape') { event.preventDefault(); this.close(); return; }
+    if (event.key !== 'Tab') return;
+    const focusable = [...this.renderRoot.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),summary,[tabindex]:not([tabindex="-1"])')]
+      .filter((element) => element.offsetParent !== null);
+    if (!focusable.length) return;
+    const active = this.shadowRoot?.activeElement; const first = focusable[0]!; const last = focusable[focusable.length - 1]!;
+    if (event.shiftKey && active === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && active === last) { event.preventDefault(); first.focus(); }
+  };
   private setMessage(message: string): void { this.#message = message; this.requestUpdate(); }
 }
 
