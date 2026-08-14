@@ -198,7 +198,7 @@ export class ActorMotionSystem {
   }
 
   followSeatedVisual(pose: SeatVisualPose): void {
-    if (!this.#seatedTarget || this.#pose !== 'sit') return;
+    if (!this.#seatedOn || this.#pose !== 'sit') return;
     const cellChanged = !sameAddress(pose.cell, this.#cell);
     this.#cell = pose.cell;
     this.#x = pose.x;

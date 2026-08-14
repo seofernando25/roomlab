@@ -65,7 +65,7 @@ export class ShopPage extends LitElement {
       const def = getCatalogueObject(listing.prototypeId);
       const mine = listing.sellerUserId === this.account.id;
       return html`<article class="card offer">
-        <div class="preview"><catalogue-object-preview prototype-id=${listing.prototypeId}></catalogue-object-preview></div>
+        <div class="preview"><catalogue-object-preview .prototypeId=${listing.prototypeId} .appearance=${listing.appearance}></catalogue-object-preview></div>
         <div class="offer-main"><h3>${def.label}</h3><div class="seller">Listed by ${listing.sellerUsername}</div><div class="offer-foot"><strong class="credits">◈ ${listing.price}</strong>${mine
           ? html`<button class="ghost" ?disabled=${this.#pending.has(listing.id)} @click=${() => this.cancel(listing.id)}>Cancel</button>`
           : html`<button class="primary" ?disabled=${this.#pending.has(listing.id)} @click=${() => this.buyListing(listing)}>${this.#pending.has(listing.id) ? 'Buying…' : 'Buy'}</button>`}</div></div>

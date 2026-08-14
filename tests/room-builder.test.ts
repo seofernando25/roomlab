@@ -33,7 +33,7 @@ const OWNER_PROVIDER = staticInteractionAccessProvider('owner');
 function editor(tool: EditorState['tool'] = 'floor-shape', levelId = GROUND): EditorState {
   return {
     selectedEntityId: null, tool, activeLevelId: levelId, floorFinish: 'wood', wallFinish: 'cream-brick',
-    pendingAnchor: null, placementPrototypeId: null, placementRotation: 0,
+    pendingAnchor: null, placementPrototypeId: null, placementRotation: 0, placementAppearance: null,
   };
 }
 

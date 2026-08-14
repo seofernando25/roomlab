@@ -1,3 +1,4 @@
+import { parseAppearanceComponent } from '../src/domain/material-design';
 import type { CellAddress, TopologyAction, TransformComponent } from '../src/domain/types';
 import type { RoomClientMessage } from '../src/online/types';
 
@@ -18,10 +19,17 @@ export function parseRoomClientMessage(value: unknown): RoomClientMessage | null
   }
   if (value.type === 'manipulation-cancel' && typeof value.manipulationId === 'string') return { type: value.type, ...base, manipulationId: value.manipulationId };
   if (value.type === 'entity-place' && typeof value.itemInstanceId === 'string' && typeof value.prototypeId === 'string' && isTransform(value.transform)) {
-    return { type: value.type, ...base, itemInstanceId: value.itemInstanceId, prototypeId: value.prototypeId, transform: value.transform };
+    if (value.appearance === null) return { type: value.type, ...base, itemInstanceId: value.itemInstanceId, prototypeId: value.prototypeId, transform: value.transform, appearance: null };
+    const appearance = parseAppearanceComponent(value.appearance);
+    return appearance ? { type: value.type, ...base, itemInstanceId: value.itemInstanceId, prototypeId: value.prototypeId, transform: value.transform, appearance } : null;
   }
   if (value.type === 'entity-rotate' && typeof value.entityId === 'string' && isQuarter(value.rotation)) return { type: value.type, ...base, entityId: value.entityId, rotation: value.rotation };
   if (value.type === 'entity-pickup' && typeof value.entityId === 'string') return { type: value.type, ...base, entityId: value.entityId };
+  if (value.type === 'entity-appearance' && typeof value.entityId === 'string') {
+    if (value.appearance === null) return { type: value.type, ...base, entityId: value.entityId, appearance: null };
+    const appearance = parseAppearanceComponent(value.appearance);
+    return appearance ? { type: value.type, ...base, entityId: value.entityId, appearance } : null;
+  }
   if (value.type === 'topology' && isTopologyAction(value.action)) return { type: value.type, ...base, action: value.action };
   if (value.type === 'teleporter-pair' && isCellAddress(value.first) && isCellAddress(value.second)) return { type: value.type, ...base, first: value.first, second: value.second };
   if (value.type === 'teleporter-remove' && typeof value.entityId === 'string') return { type: value.type, ...base, entityId: value.entityId };

@@ -34,13 +34,14 @@ export class CatalogueExplorer extends LitElement {
   declare section: Section;
   declare search: string;
   declare category: ObjectCategory;
+  #inventorySelection = new Map<string, string>();
 
   constructor() {
     super();
     this.world = { id: '', revision: 0, topology: { levels: [] }, entities: [] };
     this.editor = {
       selectedEntityId: null, tool: 'select', activeLevelId: 'ground', floorFinish: 'wood', wallFinish: 'cream-brick',
-      pendingAnchor: null, placementPrototypeId: null, placementRotation: 0,
+      pendingAnchor: null, placementPrototypeId: null, placementRotation: 0, placementAppearance: null,
     };
     this.inventory = null;
     this.section = 'objects';
@@ -100,18 +101,22 @@ export class CatalogueExplorer extends LitElement {
         </select>
       </div>
       <div class="grid">
-        ${objects.length ? objects.map((object) => html`
-          <button class="object-card ${this.editor.tool === 'place-prototype' && this.editor.placementPrototypeId === object.id ? 'active' : ''}"
-            @click=${() => this.placeObject(object.id as CatalogueObjectId, inventoryByPrototype.get(object.id)?.[0]?.id)} title=${object.description}>
-            <span class="preview">
-              <catalogue-object-preview .prototypeId=${object.id}></catalogue-object-preview>
-              <span class="footprint-badge" title="${object.placement.footprint.width}×${object.placement.footprint.depth} floor footprint">
-                ${footprintPreview(object.placement.footprint.width, object.placement.footprint.depth)}
+        ${objects.length ? objects.map((object) => {
+          const items = inventoryByPrototype.get(object.id) ?? [];
+          const item = this.selectedInventoryItem(object.id, items);
+          return html`<div class="object-wrap">
+            <button class="object-card ${this.editor.tool === 'place-prototype' && this.editor.placementPrototypeId === object.id ? 'active' : ''}"
+              @click=${() => this.placeObject(object.id as CatalogueObjectId, item?.id)} title=${object.description}>
+              <span class="preview">
+                <catalogue-object-preview .prototypeId=${object.id} .appearance=${item?.appearance ?? null}></catalogue-object-preview>
+                <span class="footprint-badge" title="${object.placement.footprint.width}×${object.placement.footprint.depth} floor footprint">${footprintPreview(object.placement.footprint.width, object.placement.footprint.depth)}</span>
               </span>
-            </span>
-            <span><span class="name">${object.label}</span><span class="meta">${getCatalogueObjectCategory(object.category).shortLabel} · ${object.placement.footprint.width}×${object.placement.footprint.depth}${this.inventory ? ` · ${inventoryByPrototype.get(object.id)?.length ?? 0} owned` : ''}</span></span>
-          </button>
-        `) : html`<div class="empty">No Catalogue objects match.</div>`}
+              <span><span class="name">${object.label}</span><span class="meta">${getCatalogueObjectCategory(object.category).shortLabel} · ${object.placement.footprint.width}×${object.placement.footprint.depth}${this.inventory ? ` · ${items.length} owned${item?.appearance ? ' · styled' : ''}` : ''}</span></span>
+            </button>
+            ${items.length > 1 ? html`<select class="item-picker" aria-label="Choose owned ${object.label}" .value=${item?.id ?? ''} @change=${(event: Event) => this.chooseInventoryItem(object.id, event)}>${items.map((owned, index) => html`<option value=${owned.id}>${index + 1} · ${owned.appearance ? 'Styled' : 'Original'}</option>`)}</select>` : nothing}
+            ${object.renderable.materialSlots?.length ? html`<button class="style-action" @click=${() => this.customizeObject(object.id as CatalogueObjectId, item)}>Style</button>` : nothing}
+          </div>`;
+        }) : html`<div class="empty">No Catalogue objects match.</div>`}
       </div>
       ${placing ? nothing : html`<div class="hint">${this.inventory ? 'Choose one of your available items, then click where you want it.' : 'Choose an object, then click where you want it. You can keep placing copies until you press Esc.'}</div>`}
     `;
@@ -209,6 +214,7 @@ export class CatalogueExplorer extends LitElement {
     return html`<button class="tool-card ${this.editor.tool === tool ? 'active' : ''}" @click=${() => this.setTool(tool)}><strong>${label}</strong>${meta}</button>`;
   }
   private placeObject(prototypeId: CatalogueObjectId, itemInstanceId?: string): void { emit(this, 'catalogue-place-object', { prototypeId, ...(itemInstanceId ? { itemInstanceId } : {}) }); }
+  private customizeObject(prototypeId: CatalogueObjectId, item?: InventoryItemDto): void { emit(this, 'catalogue-customize-object', { prototypeId, ...(item ? { itemInstanceId: item.id, appearance: item.appearance } : { appearance: null }) }); }
   private readonly rotatePlacement = (): void => emit(this, 'catalogue-rotate-placement', {});
   private chooseFloorFinish(finish: FloorFinishId): void { emit(this, 'catalogue-floor-finish', { finish }); }
   private chooseWallFinish(finish: WallFinishId): void { emit(this, 'catalogue-wall-finish', { finish }); }
@@ -234,6 +240,14 @@ export class CatalogueExplorer extends LitElement {
       result.set(item.prototypeId, [...(result.get(item.prototypeId) ?? []), item]);
     }
     return result;
+  }
+  private selectedInventoryItem(prototypeId: string, items: readonly InventoryItemDto[]): InventoryItemDto | undefined {
+    const selectedId = this.#inventorySelection.get(prototypeId);
+    return items.find((item) => item.id === selectedId) ?? items[0];
+  }
+  private chooseInventoryItem(prototypeId: string, event: Event): void {
+    this.#inventorySelection.set(prototypeId, (event.currentTarget as HTMLSelectElement).value);
+    this.requestUpdate();
   }
 
   private changeSection(section: Section): void {

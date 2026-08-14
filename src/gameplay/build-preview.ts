@@ -9,7 +9,10 @@ export function resolvedObjectPlacement(state: WorldState, editor: EditorState, 
   if (!prototypeId || getEntityPrototype(prototypeId).kind !== 'furni') return null;
   return resolveSupportedPlacement(
     state,
-    createFurniEntity(prototypeId, address.position, editor.placementRotation, 'placement-hover-probe', address.levelId),
+    createFurniEntity(
+      prototypeId, address.position, editor.placementRotation, 'placement-hover-probe', address.levelId, 0,
+      editor.placementAppearance ?? undefined,
+    ),
   );
 }
 

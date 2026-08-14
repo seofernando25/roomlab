@@ -1,4 +1,5 @@
 import { ENTITY_PROTOTYPES, getEntityPrototype } from './prototype-registry';
+import { parseAppearanceComponent } from './material-design';
 import { FLOOR_FINISHES, WALL_FINISHES } from './room-finishes';
 import { MAX_FLOOR_BASE, MAX_FLOOR_ELEVATION, MIN_FLOOR_BASE, MIN_FLOOR_ELEVATION, adjacentCellsForWall, roomLevel, wallKey } from './room-topology';
 import type { WorldEntity, WorldState } from './types';
@@ -94,6 +95,16 @@ function validateEntitySchema(state: WorldState, entity: WorldEntity, errors: st
 
   if (entity.components.teleporter && prototype.capabilities?.teleport?.status !== 'implemented') {
     errors.push(`Entity ${entity.id} has teleporter state without an implemented teleport capability.`);
+  }
+  if (entity.components.appearance) {
+    const appearance = parseAppearanceComponent(entity.components.appearance);
+    if (!appearance) errors.push(`Entity ${entity.id} has an invalid material appearance.`);
+    else {
+      const allowed = new Set(prototype.renderable.materialSlots?.map((slot) => slot.id) ?? []);
+      for (const slotId of Object.keys(appearance.materials)) {
+        if (!allowed.has(slotId)) errors.push(`Entity ${entity.id} customizes unknown material slot ${slotId}.`);
+      }
+    }
   }
 }
 

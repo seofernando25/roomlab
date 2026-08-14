@@ -5,6 +5,7 @@ import type {
   CatalogueObjectDefinition,
 } from './catalogue-ontology';
 import type { CapabilityStatus, PrototypeCapabilityKey } from './prototype-components';
+import { catalogueMaterialSlots } from './catalogue-material-slots';
 
 export const CATALOGUE_OBJECT_CATEGORIES: readonly CatalogueObjectCategoryDefinition[] = [
   { id: 'seating', label: 'Seating', shortLabel: 'Seats', description: 'Chairs, stools, sofas, and other avatar seating.' },
@@ -35,6 +36,7 @@ const traversalObject = () => ({
   canStack: true,
 });
 
+
 export const CATALOGUE_OBJECTS = {
   chair: {
     id: 'chair',
@@ -44,7 +46,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['seat', 'living', 'armchair'],
     placement: floorObject(1, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'chair' },
+    renderable: { renderer: 'procedural-furni', asset: 'chair', materialSlots: catalogueMaterialSlots('chair') },
     capabilities: { sit: { status: 'implemented', seats: [{ x: 0.50, z: 0.48, height: 0.50 }] } },
   },
   stool: {
@@ -55,7 +57,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['seat', 'compact', 'bar'],
     placement: floorObject(1, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'stool' },
+    renderable: { renderer: 'procedural-furni', asset: 'stool', materialSlots: catalogueMaterialSlots('stool') },
     capabilities: { sit: { status: 'implemented', seats: [{ x: 0.50, z: 0.50, height: 0.57 }] } },
   },
   table: {
@@ -66,7 +68,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['table', 'dining', 'surface'],
     placement: floorObject(2, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'table' },
+    renderable: { renderer: 'procedural-furni', asset: 'table', materialSlots: catalogueMaterialSlots('table') },
     capabilities: { surface: { status: 'implemented', height: 0.84, acceptsFurni: true } },
   },
   sofa: {
@@ -77,7 +79,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['seat', 'living', 'sofa', 'two-seater'],
     placement: floorObject(2, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'sofa' },
+    renderable: { renderer: 'procedural-furni', asset: 'sofa', materialSlots: catalogueMaterialSlots('sofa') },
     capabilities: {
       surface: { status: 'implemented', height: 0.68, acceptsFurni: true },
       sit: {
@@ -97,7 +99,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['vase', 'decor', 'tabletop', 'ceramic'],
     placement: floorObject(1, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'vase' },
+    renderable: { renderer: 'procedural-furni', asset: 'vase', materialSlots: catalogueMaterialSlots('vase') },
     capabilities: {},
   },
   bookcase: {
@@ -108,7 +110,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['books', 'shelf', 'display', 'storage'],
     placement: floorObject(2, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'bookcase' },
+    renderable: { renderer: 'procedural-furni', asset: 'bookcase', materialSlots: catalogueMaterialSlots('bookcase') },
     capabilities: { storage: { status: 'planned' } },
   },
   lamp: {
@@ -119,7 +121,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['light', 'lamp', 'decor'],
     placement: floorObject(1, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'lamp' },
+    renderable: { renderer: 'procedural-furni', asset: 'lamp', materialSlots: catalogueMaterialSlots('lamp') },
     capabilities: {
       light: { status: 'planned', toggleable: true },
       toggle: { status: 'planned', states: 2, initialState: 1 },
@@ -133,7 +135,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['counter', 'cooking', 'surface', 'appliance'],
     placement: floorObject(2, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'kitchen' },
+    renderable: { renderer: 'procedural-furni', asset: 'kitchen', materialSlots: catalogueMaterialSlots('kitchen') },
     capabilities: {
       surface: { status: 'implemented', height: 1.12, acceptsFurni: true },
       use: { status: 'planned', actionId: 'kitchen.cook', actionLabel: 'Cook' },
@@ -147,7 +149,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['sink', 'water', 'fixture'],
     placement: floorObject(1, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'sink' },
+    renderable: { renderer: 'procedural-furni', asset: 'sink', materialSlots: catalogueMaterialSlots('sink') },
     capabilities: { use: { status: 'planned', actionId: 'bathroom.wash', actionLabel: 'Wash' } },
   },
   toilet: {
@@ -158,7 +160,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['toilet', 'fixture', 'sanitary'],
     placement: floorObject(1, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'toilet' },
+    renderable: { renderer: 'procedural-furni', asset: 'toilet', materialSlots: catalogueMaterialSlots('toilet') },
     capabilities: {
       use: { status: 'planned', actionId: 'bathroom.flush', actionLabel: 'Flush' },
       toggle: { status: 'planned', states: 2, initialState: 0 },
@@ -172,7 +174,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['plant', 'greenery', 'decor'],
     placement: floorObject(1, 1),
     collision: { mode: 'solid' },
-    renderable: { renderer: 'procedural-furni', asset: 'plant' },
+    renderable: { renderer: 'procedural-furni', asset: 'plant', materialSlots: catalogueMaterialSlots('plant') },
     capabilities: {},
   },
   'stairs-block': {
@@ -183,7 +185,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['stairs', 'steps', 'block', 'platform'],
     placement: traversalObject(),
     collision: { mode: 'none' },
-    renderable: { renderer: 'procedural-furni', asset: 'stairs-block' },
+    renderable: { renderer: 'procedural-furni', asset: 'stairs-block', materialSlots: catalogueMaterialSlots('stairs-block') },
     capabilities: {
       surface: { status: 'implemented', height: 0.56, acceptsFurni: true },
       traversal: { status: 'implemented', mode: 'steps', maxRiseSteps: 2 },
@@ -197,7 +199,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['stairs', 'glass', 'modern', 'floating'],
     placement: traversalObject(),
     collision: { mode: 'none' },
-    renderable: { renderer: 'procedural-furni', asset: 'stairs-glass' },
+    renderable: { renderer: 'procedural-furni', asset: 'stairs-glass', materialSlots: catalogueMaterialSlots('stairs-glass') },
     capabilities: { traversal: { status: 'implemented', mode: 'steps', maxRiseSteps: 2 } },
   },
   'stairs-metal': {
@@ -208,7 +210,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['stairs', 'metal', 'industrial', 'catwalk'],
     placement: traversalObject(),
     collision: { mode: 'none' },
-    renderable: { renderer: 'procedural-furni', asset: 'stairs-metal' },
+    renderable: { renderer: 'procedural-furni', asset: 'stairs-metal', materialSlots: catalogueMaterialSlots('stairs-metal') },
     capabilities: { traversal: { status: 'implemented', mode: 'steps', maxRiseSteps: 2 } },
   },
   'ramp-metal': {
@@ -219,7 +221,7 @@ export const CATALOGUE_OBJECTS = {
     tags: ['ramp', 'metal', 'accessible', 'industrial'],
     placement: traversalObject(),
     collision: { mode: 'none' },
-    renderable: { renderer: 'procedural-furni', asset: 'ramp-metal' },
+    renderable: { renderer: 'procedural-furni', asset: 'ramp-metal', materialSlots: catalogueMaterialSlots('ramp-metal') },
     capabilities: { traversal: { status: 'implemented', mode: 'ramp', maxRiseSteps: 2 } },
   },
 } as const satisfies Readonly<Record<string, CatalogueObjectDefinition>>;

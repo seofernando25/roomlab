@@ -116,6 +116,22 @@ describe('seating system', () => {
     expect(moved.cell.levelId).toBe('upper');
   });
 
+  test('restored seated actors follow a moved seat without relying on a private cached seat target', () => {
+    const chair = furni('chair', 'chair', 1, 1);
+    const world = testWorld([chair], 4, 3, { x: 1, z: 1 });
+    const restored = {
+      ...world,
+      entities: world.entities.map((entity) => entity.id === TEST_ACTOR_ID
+        ? { ...entity, components: { ...entity.components, actor: { pose: 'sit' as const, direction: 0, seatedOn: chair.id, seatIndex: 0 } } }
+        : entity),
+    };
+    const store = new GameStore(restored);
+    const motion = new ActorMotionSystem(store, TEST_ACTOR_ID, OWNER_PROVIDER);
+    motion.followSeatedVisual({ x: 2.5, z: 1.48, height: 0.5, direction: 0, cell: addr(2, 1) });
+    expect(motion.cell).toEqual(addr(2, 1));
+    expect(store.state.entities.find((entity) => entity.id === TEST_ACTOR_ID)?.components.transform.position).toEqual({ x: 2, z: 1 });
+  });
+
   test('sofa exposes two independently targetable seat cells', () => {
     const sofa = furni('sofa', 'sofa', 1, 1);
     expect(seatTargetFor(sofa, { x: 1.2, z: 1.5 })?.cell).toEqual(addr(1, 1));

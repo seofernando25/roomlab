@@ -1,15 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import { getCatalogueObject, listCatalogueObjects } from '../src/domain/catalogue-registry';
+import { parseAppearanceComponent, type AppearanceComponent } from '../src/domain/material-design';
 import type { InventoryItemDto, MarketListingDto, StoreOfferDto, UserId } from '../src/online/types';
 import { db, nowIso, transaction } from './database';
 
 interface OfferRow { id: string; prototype_id: string; label: string; price: number; active: number; }
 interface ItemRow {
   id: string; prototype_id: string; state: 'inventory' | 'placed' | 'listed'; room_id: string | null;
-  entity_id: string | null; acquired_at: string;
+  entity_id: string | null; acquired_at: string; appearance_json: string | null;
 }
 interface ListingRow {
-  id: string; item_id: string; prototype_id: string; seller_user_id: string; seller_username: string; price: number; created_at: string;
+  id: string; item_id: string; prototype_id: string; seller_user_id: string; seller_username: string; price: number; created_at: string; appearance_json: string | null;
 }
 
 const STARTER_ITEMS = ['chair', 'chair', 'sofa', 'table', 'lamp', 'plant', 'vase', 'vase', 'stairs-block', 'stairs-block', 'stairs-block', 'ramp-metal'] as const;
@@ -38,7 +39,7 @@ export function listStoreOffers(): readonly StoreOfferDto[] {
 
 export function listInventory(userId: UserId): readonly InventoryItemDto[] {
   return db.query<ItemRow, [string]>(`
-    SELECT id, prototype_id, state, room_id, entity_id, acquired_at
+    SELECT id, prototype_id, state, room_id, entity_id, acquired_at, appearance_json
     FROM item_instances WHERE owner_user_id = ? ORDER BY acquired_at DESC, id
   `).all(userId).map(toItemDto);
 }
@@ -70,7 +71,7 @@ export function buyOfficialOffer(userId: UserId, offerId: string, requestId: str
 
 export function listMarketListings(): readonly MarketListingDto[] {
   return db.query<ListingRow, []>(`
-    SELECT l.id, l.item_id, i.prototype_id, l.seller_user_id, u.username seller_username, l.price, l.created_at
+    SELECT l.id, l.item_id, i.prototype_id, l.seller_user_id, u.username seller_username, l.price, l.created_at, i.appearance_json
     FROM market_listings l JOIN item_instances i ON i.id = l.item_id JOIN users u ON u.id = l.seller_user_id
     WHERE l.status = 'active' ORDER BY l.created_at DESC
   `).all().map(toListingDto);
@@ -124,10 +125,10 @@ export function buyMarketListing(buyerUserId: UserId, listingId: string, request
   });
 }
 
-export function reserveInventoryItemForRoom(userId: UserId, itemId: string, roomId: string, entityId: string): void {
+export function reserveInventoryItemForRoom(userId: UserId, itemId: string, roomId: string, entityId: string, appearance: AppearanceComponent | null): void {
   const now = nowIso();
-  const result = db.query("UPDATE item_instances SET state = 'placed', room_id = ?, entity_id = ?, updated_at = ? WHERE id = ? AND owner_user_id = ? AND state = 'inventory'")
-    .run(roomId, entityId, now, itemId, userId);
+  const result = db.query("UPDATE item_instances SET state = 'placed', room_id = ?, entity_id = ?, appearance_json = ?, updated_at = ? WHERE id = ? AND owner_user_id = ? AND state = 'inventory'")
+    .run(roomId, entityId, serializeAppearance(appearance), now, itemId, userId);
   if (result.changes !== 1) throw new Error('That item is no longer available in your inventory.');
 }
 
@@ -140,6 +141,13 @@ export function returnPlacedItem(userId: UserId, roomId: string, entityId: strin
 
 export function placedItemOwner(roomId: string, entityId: string): UserId | null {
   return db.query<{ owner_user_id: string }, [string, string]>("SELECT owner_user_id FROM item_instances WHERE room_id = ? AND entity_id = ? AND state = 'placed'").get(roomId, entityId)?.owner_user_id ?? null;
+}
+
+export function updatePlacedItemAppearance(roomId: string, entityId: string, appearance: AppearanceComponent | null): void {
+  const result = db.query("UPDATE item_instances SET appearance_json = ?, updated_at = ? WHERE room_id = ? AND entity_id = ? AND state = 'placed'")
+    .run(serializeAppearance(appearance), nowIso(), roomId, entityId);
+  // Built-in room furniture has no item instance. That is allowed to have room-local styling.
+  if (result.changes > 1) throw new Error('Multiple inventory items reference the same placed entity.');
 }
 
 function withOperationReceipt<T>(userId: UserId, requestId: string, operation: string, execute: () => T): T {
@@ -161,17 +169,22 @@ function withOperationReceipt<T>(userId: UserId, requestId: string, operation: s
 }
 
 function itemByIdForOwner(itemId: string, userId: UserId): InventoryItemDto | null {
-  const row = db.query<ItemRow, [string, string]>('SELECT id, prototype_id, state, room_id, entity_id, acquired_at FROM item_instances WHERE id = ? AND owner_user_id = ?').get(itemId, userId);
+  const row = db.query<ItemRow, [string, string]>('SELECT id, prototype_id, state, room_id, entity_id, acquired_at, appearance_json FROM item_instances WHERE id = ? AND owner_user_id = ?').get(itemId, userId);
   return row ? toItemDto(row) : null;
 }
 function walletBalance(userId: UserId): number {
   return db.query<{ balance: number }, [string]>('SELECT balance FROM wallets WHERE user_id = ?').get(userId)?.balance ?? 0;
 }
 function toItemDto(row: ItemRow): InventoryItemDto {
-  return { id: row.id, prototypeId: row.prototype_id, state: row.state, roomId: row.room_id, entityId: row.entity_id, acquiredAt: row.acquired_at };
+  return { id: row.id, prototypeId: row.prototype_id, state: row.state, roomId: row.room_id, entityId: row.entity_id, acquiredAt: row.acquired_at, appearance: deserializeAppearance(row.appearance_json) };
 }
 function toListingDto(row: ListingRow): MarketListingDto {
-  return { id: row.id, itemId: row.item_id, prototypeId: row.prototype_id, sellerUserId: row.seller_user_id, sellerUsername: row.seller_username, price: row.price, createdAt: row.created_at };
+  return { id: row.id, itemId: row.item_id, prototypeId: row.prototype_id, sellerUserId: row.seller_user_id, sellerUsername: row.seller_username, price: row.price, createdAt: row.created_at, appearance: deserializeAppearance(row.appearance_json) };
+}
+function serializeAppearance(appearance: AppearanceComponent | null): string | null { return appearance ? JSON.stringify(appearance) : null; }
+function deserializeAppearance(value: string | null): AppearanceComponent | null {
+  if (!value) return null;
+  try { return parseAppearanceComponent(JSON.parse(value)); } catch { return null; }
 }
 function priceFor(index: number, category: string): number {
   const base = category === 'architecture' ? 18 : category === 'seating' ? 28 : category === 'surfaces' ? 34 : category === 'decor' ? 16 : 24;

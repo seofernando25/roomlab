@@ -18,7 +18,8 @@ export function applyOnlineServerMessage(message: RoomServerMessage, context: On
   const { store, scene, network } = context;
   if (message.type === 'world' || message.type === 'hello') {
     const snapshot = network ? preserveActor(message.snapshot, store.state, network.actorId) : message.snapshot;
-    store.replaceFromServer(snapshot);
+    const result = store.replaceFromServer(snapshot);
+    if (!result.accepted) console.warn(`Rejected authoritative room snapshot r${snapshot.revision}: ${result.reason ?? 'unknown reason'}`);
     context.requestInventoryRefresh();
     return;
   }
@@ -52,7 +53,7 @@ export function forwardPredictedInventoryPlacement(
   pendingItemId: string | null,
 ): { consumed: boolean } {
   if (!network || !pendingItemId || change.type !== 'entity/add' || change.entity.prototypeId === 'tile.teleporter') return { consumed: false };
-  network.place(pendingItemId, change.entity.prototypeId, change.entity.components.transform);
+  network.place(pendingItemId, change.entity.prototypeId, change.entity.components.transform, change.entity.components.appearance ?? null);
   return { consumed: true };
 }
 

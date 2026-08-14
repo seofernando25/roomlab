@@ -1,4 +1,5 @@
 import type { CellAddress, RoomLevelId, RotationQuarter, TopologyAction, TransformComponent, WorldState } from '../domain/types';
+import type { AppearanceComponent } from '../domain/material-design';
 
 export type UserId = string;
 export type RoomId = string;
@@ -39,6 +40,7 @@ export interface InventoryItemDto {
   readonly roomId: RoomId | null;
   readonly entityId: string | null;
   readonly acquiredAt: string;
+  readonly appearance: AppearanceComponent | null;
 }
 
 export interface StoreOfferDto {
@@ -57,6 +59,7 @@ export interface MarketListingDto {
   readonly sellerUsername: string;
   readonly price: number;
   readonly createdAt: string;
+  readonly appearance: AppearanceComponent | null;
 }
 
 export interface RoomEditorDto {
@@ -99,9 +102,10 @@ export type RoomClientMessage =
   | { readonly type: 'manipulation-pose'; readonly clientCommandId: string; readonly clientSequence: number; readonly manipulationId: string; readonly transform: TransformComponent; readonly lift?: number }
   | { readonly type: 'manipulation-commit'; readonly clientCommandId: string; readonly clientSequence: number; readonly manipulationId: string; readonly transform: TransformComponent }
   | { readonly type: 'manipulation-cancel'; readonly clientCommandId: string; readonly clientSequence: number; readonly manipulationId: string }
-  | { readonly type: 'entity-place'; readonly clientCommandId: string; readonly clientSequence: number; readonly itemInstanceId: ItemInstanceId; readonly prototypeId: string; readonly transform: TransformComponent }
+  | { readonly type: 'entity-place'; readonly clientCommandId: string; readonly clientSequence: number; readonly itemInstanceId: ItemInstanceId; readonly prototypeId: string; readonly transform: TransformComponent; readonly appearance: AppearanceComponent | null }
   | { readonly type: 'entity-rotate'; readonly clientCommandId: string; readonly clientSequence: number; readonly entityId: string; readonly rotation: RotationQuarter }
   | { readonly type: 'entity-pickup'; readonly clientCommandId: string; readonly clientSequence: number; readonly entityId: string }
+  | { readonly type: 'entity-appearance'; readonly clientCommandId: string; readonly clientSequence: number; readonly entityId: string; readonly appearance: AppearanceComponent | null }
   | { readonly type: 'topology'; readonly clientCommandId: string; readonly clientSequence: number; readonly action: TopologyAction }
   | { readonly type: 'teleporter-pair'; readonly clientCommandId: string; readonly clientSequence: number; readonly first: CellAddress; readonly second: CellAddress }
   | { readonly type: 'teleporter-remove'; readonly clientCommandId: string; readonly clientSequence: number; readonly entityId: string };

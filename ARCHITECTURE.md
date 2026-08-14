@@ -26,7 +26,7 @@ Entity class (`furni`, `actor`, `npc`, `pet`, `effect`) is derived from the prot
 
 Static data belongs on prototypes: footprint, occupancy layer, collision mode, seat slots, supported capabilities, render asset, requirements, etc.
 
-Mutable state belongs on entity components: actor pose, toggle state, teleporter links, visual-effect state, etc.
+Mutable state belongs on entity components: actor pose, toggle state, teleporter links, visual-effect state, per-item material appearance, etc.
 
 Do not add `isOpen`, `isBurning`, `teleportTarget`, `locked`, and similar one-off fields directly to `WorldEntity`.
 
@@ -175,6 +175,14 @@ Create a prototype of kind `npc`/`pet` and an entity with an `actor` runtime com
 Use runtime presentation/effect components or effect entities. Simulation state should describe the effect (`id`, intensity/state); rendering adapters decide shaders, particles, lights, or postprocessing.
 
 Do not put Three.js materials/passes into domain state.
+
+### Programmable furniture materials
+
+Furniture appearance is authoritative **recipe data**, never a Three.js material, shader source, script, URL, or uploaded executable asset. A prototype declares semantic `renderable.materialSlots`; an entity may carry an `appearance.materials` map that assigns a validated `MaterialStyle` to those slots. Owned-item persistence mirrors the same canonical appearance so pickup and Marketplace transfer preserve identity.
+
+`material-design.ts` defines the bounded recipe language and parser. `material-program-texture.ts` is the rendering adapter that compiles that data into a nearest-filtered Three.js texture. `object-material-appearance.ts` applies recipes only to meshes tagged with the corresponding semantic slot. New furniture authors should tag geometry and declare slot metadata rather than branch in Material Studio or `RoomScene`.
+
+The recipe language intentionally remains finite and deterministic. Add new reusable layer primitives to the domain parser + renderer together; do not add an "escape hatch" for arbitrary JS/GLSL. Every authoritative recipe addition needs parser bounds, deterministic rendering, protocol validation, and tests.
 
 ### Floors, wallpaper, walls, windows, paintings
 

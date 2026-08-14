@@ -38,10 +38,19 @@ export function syncRoomDiagnostics(canvas: HTMLCanvasElement, state: WorldState
     const transform = entity.components.transform;
     return `${entity.id}@${transform.levelId}:${transform.position.x},${transform.position.z}`;
   }).sort().join(';');
+  canvas.dataset.remoteActorStates = remoteActors.map((entity) => {
+    const actor = entity.components.actor;
+    return `${entity.id}:${actor?.pose ?? 'unknown'}:${actor?.seatedOn ?? ''}:${actor?.seatIndex ?? ''}`;
+  }).sort().join(';');
   canvas.dataset.topologySignature = topologySignature(state);
   const furni = furniEntities(state);
   canvas.dataset.furniCount = String(furni.length);
+  canvas.dataset.customAppearances = String(furni.filter((entity) => entity.components.appearance).length);
   canvas.dataset.objectPrototypes = furni.map((entity) => entity.prototypeId).sort().join(',');
+  canvas.dataset.objectCells = furni.map((entity) => {
+    const transform = entity.components.transform;
+    return `${entity.prototypeId}:${entity.id}@${transform.levelId}:${transform.position.x},${transform.position.z}`;
+  }).sort().join(';');
 }
 
 function topologySignature(state: WorldState): string {

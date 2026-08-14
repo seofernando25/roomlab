@@ -1,12 +1,15 @@
 import * as THREE from 'three';
+import { materialAppearanceKey, type AppearanceComponent } from '../domain/material-design';
 import { getEntityPrototype } from '../domain/prototype-registry';
 import { FLOOR_STEP_HEIGHT, floorWorldY } from '../domain/room-topology';
 import type { CellAddress, PrototypeId, RotationQuarter, WorldState } from '../domain/types';
+import { disposeRenderTree } from './dispose-render-tree';
 import { createObjectVisual } from './object-factory';
 
 export class ObjectPlacementGhost {
   readonly group = new THREE.Group();
   #prototypeId: PrototypeId | null = null;
+  #appearanceKey = 'default';
   #visual: THREE.Group | null = null;
 
   constructor() {
@@ -21,8 +24,10 @@ export class ObjectPlacementGhost {
     rotation: RotationQuarter,
     valid: boolean,
     elevationSteps = 0,
+    appearance?: AppearanceComponent | null,
   ): void {
-    if (this.#prototypeId !== prototypeId || !this.#visual) this.rebuild(prototypeId);
+    const appearanceKey = materialAppearanceKey(appearance);
+    if (this.#prototypeId !== prototypeId || this.#appearanceKey !== appearanceKey || !this.#visual) this.rebuild(prototypeId, appearance ?? undefined);
     const base = getEntityPrototype(prototypeId).spatial?.footprint ?? { width: 1, depth: 1 };
     const footprint = rotation % 2 === 1 ? { width: base.depth, depth: base.width } : base;
     this.group.position.set(
@@ -38,18 +43,19 @@ export class ObjectPlacementGhost {
   hide(): void { this.group.visible = false; }
 
   dispose(): void {
-    if (this.#visual) disposeTree(this.#visual);
+    if (this.#visual) disposeRenderTree(this.#visual);
     this.group.clear();
     this.#visual = null;
     this.#prototypeId = null;
+    this.#appearanceKey = 'default';
   }
 
-  private rebuild(prototypeId: PrototypeId): void {
+  private rebuild(prototypeId: PrototypeId, appearance?: AppearanceComponent): void {
     if (this.#visual) {
       this.group.remove(this.#visual);
-      disposeTree(this.#visual);
+      disposeRenderTree(this.#visual);
     }
-    const visual = createObjectVisual(prototypeId);
+    const visual = createObjectVisual(prototypeId, appearance);
     visual.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
@@ -61,9 +67,11 @@ export class ObjectPlacementGhost {
         if ('color' in copy && copy.color instanceof THREE.Color) copy.userData.previewBaseColor = copy.color.clone();
         return copy;
       });
+      for (const material of materials) if (!material.userData.sharedCatalogueResource) material.dispose();
       object.material = Array.isArray(object.material) ? cloned : cloned[0]!;
     });
     this.#prototypeId = prototypeId;
+    this.#appearanceKey = materialAppearanceKey(appearance);
     this.#visual = visual;
     this.group.add(visual);
   }
@@ -82,13 +90,4 @@ export class ObjectPlacementGhost {
       }
     });
   }
-}
-
-function disposeTree(root: THREE.Object3D): void {
-  root.traverse((object) => {
-    if (!(object instanceof THREE.Mesh)) return;
-    object.geometry.dispose();
-    const materials = Array.isArray(object.material) ? object.material : [object.material];
-    for (const material of materials) material.dispose();
-  });
 }

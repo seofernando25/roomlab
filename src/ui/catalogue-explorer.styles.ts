@@ -22,11 +22,14 @@ export const catalogueExplorerStyles = css`
   .active-tool span { min-width:0; color:#65766b; font-size:8px; text-align:right; }
   .placement-rotate { flex:0 0 auto; min-height:32px; border:2px solid #566f5e; border-radius:4px; background:#678970; color:#fff; font:inherit; font-size:8px; font-weight:900; cursor:pointer; }
   .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; align-content:start; }
+  .object-wrap { position:relative; min-width:0; }
   .object-card, .tool-card, .finish, .height-choice, .pair, .action {
     border:2px solid #8e9d99; border-radius:5px; background:#f6f8f7; color:#34484d; font:inherit; cursor:pointer;
     box-shadow:inset 0 2px rgba(255,255,255,.78),0 2px #c1cac7;
   }
-  .object-card { min-height:88px; padding:7px; display:grid; grid-template-columns:72px minmax(0,1fr); gap:8px; text-align:left; align-items:center; }
+  .object-card { width:100%; min-height:88px; padding:7px 7px 34px; display:grid; grid-template-columns:72px minmax(0,1fr); gap:8px; text-align:left; align-items:center; }
+  .item-picker { position:absolute; left:7px; bottom:6px; width:84px; height:25px; padding:0 4px; font-size:7px; }
+  .style-action { position:absolute; right:7px; bottom:6px; min-width:54px; min-height:25px; border:2px solid #517586; border-radius:4px; background:#6e96a7; color:#fff; box-shadow:inset 0 2px rgba(255,255,255,.18); font:900 8px inherit; cursor:pointer; }
   .object-card:hover,.tool-card:hover,.finish:hover,.height-choice:hover { border-color:#62838a; background:#fff; }
   .object-card.active,.tool-card.active,.finish.active,.height-choice.active { border-color:#527d8e; background:#e3f0f3; box-shadow:0 0 0 2px #bdd8df; }
   .preview { position:relative; width:68px; height:68px; display:grid; place-items:center; overflow:hidden; border:2px solid #9ca9a6; border-radius:5px; background:linear-gradient(#edf2f0,#d8e2df); }
@@ -80,7 +83,7 @@ export const catalogueExplorerStyles = css`
     .main{min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-right:1px}
     .toolbar{position:sticky;top:0;z-index:2;padding-bottom:5px;background:#e7ece9}.toolbar input,.toolbar select{height:44px;font-size:16px}
     .active-tool{display:grid;grid-template-columns:1fr auto;align-items:center}.active-tool span{grid-column:1;text-align:left}.placement-rotate{grid-column:2;grid-row:1/3;min-height:44px}
-    .grid{grid-template-columns:1fr}.object-card{min-height:92px}.tools{grid-template-columns:repeat(3,1fr)}.tool-card{min-height:52px}.finishes{grid-template-columns:repeat(2,1fr)}
+    .grid{grid-template-columns:1fr}.object-card{min-height:96px;padding-bottom:48px}.style-action{min-width:74px;min-height:44px;bottom:5px}.item-picker{left:6px;bottom:5px;width:118px;height:44px;font-size:16px}.tools{grid-template-columns:repeat(3,1fr)}.tool-card{min-height:52px}.finishes{grid-template-columns:repeat(2,1fr)}
     .action{min-width:44px;min-height:44px}.height-choice{min-height:44px}.height-input{min-height:44px;font-size:16px}.remove{min-height:44px}.hint{font-size:9px}
   }
 `;

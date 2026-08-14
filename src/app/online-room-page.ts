@@ -1,6 +1,7 @@
 import { LitElement, css, html } from 'lit';
 import { keyed } from 'lit/directives/keyed.js';
 import { api } from '../online/api-client';
+import { DelegatingRoomGameNetwork } from '../online/delegating-game-network';
 import { RoomConnection } from '../online/room-connection';
 import { RoomGameNetworkAdapter } from '../online/room-game-network';
 import type { AccountDto, InventoryItemDto, JoinRoomDto, RoomServerMessage } from '../online/types';
@@ -33,6 +34,7 @@ export class OnlineRoomPage extends LitElement {
   #inventory: readonly InventoryItemDto[] = [];
   #connection: RoomConnection | null = null;
   #network: RoomGameNetworkAdapter | null = null;
+  readonly #gameNetwork = new DelegatingRoomGameNetwork(() => this.#network);
   #status: 'connecting'|'connected'|'reconnecting'|'closed' = 'connecting';
   #message = '';
   #settingsOpen = false;
@@ -59,7 +61,7 @@ export class OnlineRoomPage extends LitElement {
     const join=this.#join; if(!join||!this.#network)return html`<div class="loading">Entering room…</div>`;
     return html`${keyed(join.roomSessionId,html`<habbo-game
       .initialWorld=${join.snapshot}
-      .network=${this.#network}
+      .network=${this.#gameNetwork}
       .inventory=${this.#inventory}
       .roomName=${join.room.name}
       .roomSubtitle=${`by ${join.room.ownerUsername}`}
@@ -92,7 +94,10 @@ export class OnlineRoomPage extends LitElement {
 
   private configureJoin(join:JoinRoomDto):void{
     this.#join=join;
-    if(this.#connection)this.#network=this.makeNetwork(join,this.#connection);
+    if(this.#connection){
+      if(this.#network?.actorId===join.actorId)this.#network.updateRole(join.room.role);
+      else this.#network=this.makeNetwork(join,this.#connection);
+    }
     this.requestUpdate();
   }
   private makeNetwork(join:JoinRoomDto,connection:RoomConnection):RoomGameNetworkAdapter{

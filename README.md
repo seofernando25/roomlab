@@ -45,7 +45,7 @@ The game now uses a deliberately small **hybrid ECS-lite** model:
 - `WorldEntity` represents dynamic things such as furni, actors, NPCs, pets, Roombas, and effects.
 - `prototype-registry.ts` defines static entity defaults/capabilities.
 - `furni-registry.ts` is the catalogue-specific view for furni metadata.
-- entity runtime components contain mutable state such as transform, actor pose/facing, toggle state, teleporter links, and visual effects.
+- entity runtime components contain mutable state such as transform, actor pose/facing, toggle state, teleporter links, visual effects, and per-item material appearance.
 - `EditorState` is local-only; selection is deliberately not part of authoritative multiplayer state.
 
 Entity class is derived from its prototype instead of duplicated on each instance.
@@ -85,6 +85,16 @@ The Catalogue is prototype/capability-driven rather than a flat list of kind che
 
 Edit mode includes a searchable/category-filterable **Catalogue** driven entirely by registry metadata. `hotel-panel.ts` is a reusable compact UI shell inspired by the useful structural ideas in `references/style.css`—colored title strips, light bodies, edge borders, and compact chrome—without copying its font, branding, or sprite-sheet assets.
 
+### Material Studio
+
+Custom furniture styling is built as a deterministic **material recipe language**, not arbitrary JavaScript or shader snippets. Furniture prototypes expose semantic parts such as Upholstery, Cushion, Frame, Wood, Counter, Ceramic, or Foliage. The Material Studio previews the complete furniture while a user edits one part at a time.
+
+Recipes use a bounded base color plus composable procedural layers: stripes, checker, grid, dots, seeded speckles, and seeded grain. Resolution, repeat, spacing, thickness, opacity, angle, density, radius, and seeds are all validated before they can enter authoritative room state. Recipes cannot contain executable code, remote URLs, or user shaders. WebSocket room commands are capped at 64 KiB and canonical material appearance is capped at 12 KiB with at most 8 material slots and 6 layers per slot.
+
+The UI leads with curated styles such as Fine Linen, Walnut Grain, Studio Charcoal, Clean Ivory, and natural foliage; layer controls remain available underneath for custom patterns. Users may save up to 24 named material recipes in **My Patterns** in local browser storage. Those saved recipe shortcuts are browser-local, but once a recipe is applied to an owned furniture item its canonical appearance belongs to that exact item instance: pickup, room changes, Marketplace listing, and Marketplace transfer retain it.
+
+When several owned items share a prototype, the Catalogue exposes the exact owned copy (`Styled` or `Original`) rather than treating them as interchangeable. A room editor may move another player's item, but permanent restyling of an owned item is restricted to the item owner or room owner. Built-in room furniture that has no owned item instance may use room-local styling.
+
 ## Rendering
 
 `src/rendering/` owns Three.js and presentation interpolation. `room-scene.ts` synchronizes entity state to render objects and runs the camera/render loop; game rules stay in `src/gameplay/`.
@@ -115,9 +125,9 @@ bun run smoke:mobile # 390x844 touch scrolling, gestures, room UI and Catalogue 
 bun run visual:qa # optional OpenRouter visual comparison against references/
 ```
 
-The desktop smoke exercises camera modes, floor hover, click-to-walk, authored walking, click-to-sit, Play/Edit switching, the Catalogue, direct floor-base-height editing, seated furniture pickup/dragging, Pixel Transport during seated chair rotation, panning, zoom, adding objects, rotation, and WebGL sizing. Browser console/page errors fail the smoke pass. The mobile smoke additionally verifies real touch scrolling on the landing/lobby, compact Shop rows, tap-to-walk, one-finger camera panning, pinch zoom including the wider portrait zoom-out range, double-tap browser-zoom suppression on the room canvas, full-viewport canvas behavior, and touch-sized Catalogue controls.
+The desktop smoke exercises camera modes, floor hover, click-to-walk, authored walking, click-to-sit, Play/Edit switching, the Catalogue, Material Studio preview/presets/saved patterns, styled placement, direct floor-base-height editing, seated furniture pickup/dragging, Pixel Transport during seated chair rotation, panning, zoom, adding objects, rotation, and WebGL sizing. Browser console/page errors fail the smoke pass. The mobile smoke additionally verifies real touch scrolling on the landing/lobby, compact Shop rows, Material Studio sheet scrolling and touch sizes, tap-to-walk, one-finger camera panning, pinch zoom including the wider portrait zoom-out range, double-tap browser-zoom suppression on the room canvas, full-viewport canvas behavior, and touch-sized Catalogue controls. The two-browser online acceptance flow verifies styled-item persistence through placement, placed-item restyling, seated live manipulation, pickup, Marketplace transfer, rights, presence, friends, and restart/reconnect.
 
-Interaction screenshots are written under `artifacts/`, including `room.png`, `room-editor.png`, `furni-explorer.png`, `avatar-walk.png`, `avatar-sit.png`, `avatar-sit-furni-hover.png`, and `avatar-sit-furni-rotate-transport.png`.
+Interaction screenshots are written under `artifacts/`, including `room.png`, `ui-catalogue.png`, `ui-material-studio.png`, `mobile-material-studio.png`, `online-material-studio.png`, and the room/editor/multiplayer captures used by the smoke suites.
 
 
 ## Deployment

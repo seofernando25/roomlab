@@ -134,6 +134,7 @@ export class RoomBuildController {
         this.#store.editorState.placementRotation,
         valid,
         resolved?.components.transform.elevation ?? 0,
+        this.#store.editorState.placementAppearance,
       );
     } else this.#objectGhost.hide();
     this.setDataset(hit.cell, `build-${tool}`, valid);

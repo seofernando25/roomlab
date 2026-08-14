@@ -69,7 +69,14 @@ export interface CollisionComponentDefinition {
   readonly mode: 'solid' | 'none' | 'gate';
 }
 
+export interface MaterialSlotDefinition {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+}
+
 export interface RenderableComponentDefinition {
   readonly renderer: 'procedural-furni' | 'human-avatar' | 'none';
   readonly asset?: string;
+  readonly materialSlots?: readonly MaterialSlotDefinition[];
 }

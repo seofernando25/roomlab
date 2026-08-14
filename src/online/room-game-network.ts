@@ -1,3 +1,4 @@
+import type { AppearanceComponent } from '../domain/material-design';
 import type { CellAddress, EntityId, TopologyAction, TransformComponent } from '../domain/types';
 import type { RoomGameNetwork } from './game-network';
 import { RoomConnection } from './room-connection';
@@ -34,8 +35,10 @@ export class RoomGameNetworkAdapter implements RoomGameNetwork {
       }
     }
     if (message.type === 'manipulation-end') {
-      this.#leases.delete(message.entityId);
-      this.#pendingCommit.delete(message.entityId);
+      if (this.#leases.get(message.entityId) === message.manipulationId) {
+        this.#leases.delete(message.entityId);
+        this.#pendingCommit.delete(message.entityId);
+      }
     }
   }
 
@@ -45,7 +48,8 @@ export class RoomGameNetworkAdapter implements RoomGameNetwork {
   topology(action: TopologyAction): void { if (this.canEdit) this.fire({ type: 'topology', action }); }
   rotate(entityId: EntityId, rotation: 0|1|2|3): void { if (this.canEdit) this.fire({ type: 'entity-rotate', entityId, rotation }); }
   pickup(entityId: EntityId): void { if (this.canEdit) this.fire({ type: 'entity-pickup', entityId }); }
-  place(itemInstanceId: string, prototypeId: string, transform: TransformComponent): void { if (this.canEdit) this.fire({ type: 'entity-place', itemInstanceId, prototypeId, transform }); }
+  place(itemInstanceId: string, prototypeId: string, transform: TransformComponent, appearance: AppearanceComponent | null): void { if (this.canEdit) this.fire({ type: 'entity-place', itemInstanceId, prototypeId, transform, appearance }); }
+  setAppearance(entityId: EntityId, appearance: AppearanceComponent | null): void { if (this.canEdit) this.fire({ type: 'entity-appearance', entityId, appearance }); }
   createTeleporter(first: CellAddress, second: CellAddress): void { if (this.canEdit) this.fire({ type: 'teleporter-pair', first, second }); }
   removeTeleporter(entityId: EntityId): void { if (this.canEdit) this.fire({ type: 'teleporter-remove', entityId }); }
 
@@ -71,13 +75,14 @@ export class RoomGameNetworkAdapter implements RoomGameNetwork {
       window.setTimeout(() => this.#pendingCommit.delete(entityId), 2500);
       return;
     }
+    this.#leases.delete(entityId);
     this.fire({ type: 'manipulation-commit', manipulationId: lease, transform });
   }
 
   cancelManipulation(entityId: EntityId): void {
     const lease = this.#leases.get(entityId);
     this.#pendingCommit.delete(entityId);
-    if (lease) this.fire({ type: 'manipulation-cancel', manipulationId: lease });
+    if (lease) { this.#leases.delete(entityId); this.fire({ type: 'manipulation-cancel', manipulationId: lease }); }
   }
 
   private fire(message: CommandInput): void {

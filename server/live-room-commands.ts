@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { entityById } from '../src/domain/entity-queries';
+import { materialAppearanceError } from '../src/domain/material-appearance-rules';
+import type { AppearanceComponent } from '../src/domain/material-design';
 import { getEntityPrototype } from '../src/domain/prototype-registry';
-import { floorWorldY, roomCellAt } from '../src/domain/room-topology';
+import { roomCellAt } from '../src/domain/room-topology';
 import type { CellAddress, EntityId, TransformComponent, WorldAction } from '../src/domain/types';
+import { validateWorldState } from '../src/domain/world-validation';
 import { createFurniEntity, reduceWorld } from '../src/domain/world-state';
 import { seatTargetsFor } from '../src/gameplay/seating-system';
 import type { RoomClientMessage } from '../src/online/types';
-import { inventoryItem, placedItemOwner, reserveInventoryItemForRoom, returnPlacedItem } from './economy-service';
+import { inventoryItem, placedItemOwner, reserveInventoryItemForRoom, returnPlacedItem, updatePlacedItemAppearance } from './economy-service';
 import { transaction } from './database';
 import type { LiveRoom, ManipulationLease, Member } from './live-room-model';
 import { assertEditor, sameAddress, teleporterEntity } from './live-room-model';
@@ -35,9 +38,10 @@ export class LiveRoomCommands {
     if (message.type === 'manipulation-pose') { this.updateManipulation(room, member, message.manipulationId, message.transform, message.lift ?? 0.18); return; }
     if (message.type === 'manipulation-commit') { this.commitManipulation(room, member, message.manipulationId, message.transform); return; }
     if (message.type === 'manipulation-cancel') { this.cancelManipulation(room, member, message.manipulationId); return; }
-    if (message.type === 'entity-place') { this.placeEntity(room, member, message.itemInstanceId, message.prototypeId, message.transform); return; }
+    if (message.type === 'entity-place') { this.placeEntity(room, member, message.itemInstanceId, message.prototypeId, message.transform, message.appearance); return; }
     if (message.type === 'entity-rotate') { this.persistAction(room, member, { type: 'transform/rotate', id: message.entityId, rotation: message.rotation }); return; }
     if (message.type === 'entity-pickup') { this.pickupEntity(room, member, message.entityId); return; }
+    if (message.type === 'entity-appearance') { this.setAppearance(room, member, message.entityId, message.appearance); return; }
     if (message.type === 'topology') { this.persistAction(room, member, message.action); return; }
     if (message.type === 'teleporter-pair') { this.createTeleportPair(room, member, message.first, message.second); return; }
     if (message.type === 'teleporter-remove') this.removeTeleportPair(room, member, message.entityId);
@@ -74,8 +78,24 @@ export class LiveRoomCommands {
 
   private commitManipulation(room: LiveRoom, member: Member, leaseId: string, transform: TransformComponent): void {
     const lease = this.requireLease(room, member, leaseId);
-    this.persistAction(room, member, { type: 'transform/set', id: lease.entityId, transform });
+    assertEditor(member);
+    const before = room.store.state;
+    const action: WorldAction = { type: 'transform/set', id: lease.entityId, transform };
+    if (!room.store.dispatch(action).accepted) throw new Error('That furniture move is not valid.');
     this.syncSeatedActors(room, lease.entityId);
+    const validation = validateWorldState(room.store.state);
+    if (!validation.valid) {
+      room.store.replaceFromServer(before);
+      for (const attached of room.members.values()) attached.motion.syncFromWorld();
+      throw new Error(`Furniture move produced invalid room state: ${validation.errors.join(' ')}`);
+    }
+    try { transaction(() => saveRoomWorldInTransaction(room.roomId, room.store.state)); }
+    catch (error) {
+      room.store.replaceFromServer(before);
+      for (const attached of room.members.values()) attached.motion.syncFromWorld();
+      throw error;
+    }
+    this.publisher.broadcastWorld(room);
     room.manipulations.delete(lease.id);
     this.publisher.broadcastManipulationEnd(room, lease);
   }
@@ -84,16 +104,41 @@ export class LiveRoomCommands {
     this.cancelLease(room, this.requireLease(room, member, leaseId));
   }
 
-  private placeEntity(room: LiveRoom, member: Member, itemId: string, prototypeId: string, transform: TransformComponent): void {
+  private placeEntity(room: LiveRoom, member: Member, itemId: string, prototypeId: string, transform: TransformComponent, appearance: AppearanceComponent | null): void {
     assertEditor(member);
     const item = inventoryItem(member.userId, itemId);
     if (!item || item.state !== 'inventory' || item.prototypeId !== prototypeId) throw new Error('That inventory item is no longer available.');
-    const entity = createFurniEntity(prototypeId, transform.position, transform.rotation, randomUUID(), transform.levelId, transform.elevation ?? 0);
+    if (appearance) {
+      const appearanceError = materialAppearanceError(prototypeId, appearance);
+      if (appearanceError) throw new Error(appearanceError);
+    }
+    const entity = createFurniEntity(prototypeId, transform.position, transform.rotation, randomUUID(), transform.levelId, transform.elevation ?? 0, appearance ?? undefined);
     const action: WorldAction = { type: 'entity/add', entity };
     const preview = reduceWorld(room.store.state, action);
     if (preview === room.store.state) throw new Error('That item does not fit there.');
     transaction(() => {
-      reserveInventoryItemForRoom(member.userId, itemId, room.roomId, entity.id);
+      reserveInventoryItemForRoom(member.userId, itemId, room.roomId, entity.id, appearance);
+      saveRoomWorldInTransaction(room.roomId, preview);
+    });
+    room.store.dispatch(action);
+    this.publisher.broadcastWorld(room);
+  }
+
+  private setAppearance(room: LiveRoom, member: Member, entityId: EntityId, appearance: AppearanceComponent | null): void {
+    assertEditor(member);
+    const entity = entityById(room.store.state, entityId);
+    if (!entity || getEntityPrototype(entity.prototypeId).kind !== 'furni') throw new Error('That object cannot be customized.');
+    const itemOwnerId = placedItemOwner(room.roomId, entityId);
+    if (itemOwnerId && itemOwnerId !== member.userId && member.role !== 'owner') throw new Error('Only the item owner or room owner can restyle that item.');
+    if (appearance) {
+      const appearanceError = materialAppearanceError(entity.prototypeId, appearance);
+      if (appearanceError) throw new Error(appearanceError);
+    }
+    const action: WorldAction = { type: 'component/set', id: entityId, component: 'appearance', value: appearance };
+    const preview = reduceWorld(room.store.state, action);
+    if (preview === room.store.state) throw new Error('That material change is not valid.');
+    transaction(() => {
+      updatePlacedItemAppearance(room.roomId, entityId, appearance);
       saveRoomWorldInTransaction(room.roomId, preview);
     });
     room.store.dispatch(action);
@@ -163,15 +208,23 @@ export class LiveRoomCommands {
     if (!seatEntity) return;
     const targets = seatTargetsFor(seatEntity);
     for (const attached of room.members.values()) {
-      const actor = entityById(room.store.state, attached.actorId)?.components.actor;
+      const actorEntity = entityById(room.store.state, attached.actorId);
+      const actor = actorEntity?.components.actor;
       const seatIndex = actor?.seatedOn === seatEntityId && actor.seatIndex !== undefined
         ? actor.seatIndex
         : attached.pendingSeat?.entityId === seatEntityId ? attached.pendingSeat.seatIndex : undefined;
       if (seatIndex === undefined) continue;
       const target = targets[seatIndex];
       if (!target) continue;
-      if (actor?.seatedOn === seatEntityId) {
-        attached.motion.followSeatedVisual({ x: target.x, z: target.z, direction: target.direction, cell: target.cell, height: floorWorldY(room.store.state.topology, target.cell) + target.height });
+      if (actorEntity && actor?.seatedOn === seatEntityId) {
+        const actions: WorldAction[] = [];
+        const currentCell = { levelId: actorEntity.components.transform.levelId, position: actorEntity.components.transform.position };
+        if (!sameAddress(currentCell, target.cell)) actions.push({ type: 'transform/move', id: attached.actorId, address: target.cell, validatePlacement: false });
+        if (actor.pose !== 'sit' || actor.direction !== target.direction || actor.seatedOn !== seatEntityId || actor.seatIndex !== seatIndex) {
+          actions.push({ type: 'component/set', id: attached.actorId, component: 'actor', value: { ...actor, pose: 'sit', direction: target.direction, seatedOn: seatEntityId, seatIndex } });
+        }
+        if (actions.length) room.store.dispatchBatch(actions);
+        attached.motion.syncFromWorld();
       } else attached.motion.sitAt(target, room.store.state);
     }
   }

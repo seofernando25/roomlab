@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { AppearanceComponent } from '../domain/material-design';
+import { disposeTransientMaterialTexture } from './material-program-texture';
 import { createObjectVisual } from './object-factory';
 
 const THUMBNAIL_SIZE = 112;
@@ -9,11 +11,12 @@ let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene | null = null;
 let camera: THREE.OrthographicCamera | null = null;
 
-export function catalogueThumbnail(prototypeId: string): string {
-  const cached = cache.get(prototypeId);
+export function catalogueThumbnail(prototypeId: string, appearance?: AppearanceComponent | null): string {
+  const cacheable = !appearance || Object.keys(appearance.materials).length === 0;
+  const cached = cacheable ? cache.get(prototypeId) : undefined;
   if (cached) return cached;
   const preview = ensurePreviewScene();
-  const object = createObjectVisual(prototypeId);
+  const object = createObjectVisual(prototypeId, appearance ?? undefined, cacheable);
   object.rotation.y = CATALOGUE_PREVIEW_OBJECT_YAW;
   preview.scene.add(object);
   frameObject(preview.camera, object);
@@ -21,7 +24,7 @@ export function catalogueThumbnail(prototypeId: string): string {
   const url = preview.renderer.domElement.toDataURL('image/png');
   preview.scene.remove(object);
   disposePreviewObject(object);
-  cache.set(prototypeId, url);
+  if (cacheable) cache.set(prototypeId, url);
   return url;
 }
 
@@ -79,6 +82,7 @@ function disposePreviewObject(root: THREE.Object3D): void {
     object.geometry.dispose();
     const materials = Array.isArray(object.material) ? object.material : [object.material];
     for (const material of materials) {
+      if ('map' in material) disposeTransientMaterialTexture((material as THREE.MeshBasicMaterial).map);
       if (!material.userData.sharedCatalogueResource) material.dispose();
     }
   });

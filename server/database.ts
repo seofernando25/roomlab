@@ -137,7 +137,14 @@ if (schemaVersion < 2) {
   })();
   schemaVersion = 2;
 }
-if (schemaVersion > 2) throw new Error(`Database schema ${schemaVersion} is newer than this server supports.`);
+if (schemaVersion < 3) {
+  db.transaction(() => {
+    db.run('ALTER TABLE item_instances ADD COLUMN appearance_json TEXT');
+    db.query('INSERT INTO schema_migrations(version, applied_at) VALUES(3, ?)').run(new Date().toISOString());
+  })();
+  schemaVersion = 3;
+}
+if (schemaVersion > 3) throw new Error(`Database schema ${schemaVersion} is newer than this server supports.`);
 
 export function nowIso(): string { return new Date().toISOString(); }
 

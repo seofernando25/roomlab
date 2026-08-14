@@ -1,4 +1,5 @@
 import { LOCAL_PLAYER_ID, LOCAL_PLAYER_PROTOTYPE_ID, entityById } from './entity-queries';
+import type { AppearanceComponent } from './material-design';
 import { getEntityPrototype } from './prototype-registry';
 import { applyTopologyAction, createRectangularTopology, DEFAULT_LEVEL_ID } from './room-topology';
 import { isValidEntityPlacement } from './world-placement';
@@ -51,8 +52,9 @@ export function createFurniEntity(
   id: EntityId = crypto.randomUUID(),
   levelId: RoomLevelId = DEFAULT_LEVEL_ID,
   elevation = 0,
+  appearance?: AppearanceComponent,
 ): WorldEntity {
-  return furni(prototypeId, position.x, position.z, rotation, id, levelId, elevation);
+  return furni(prototypeId, position.x, position.z, rotation, id, levelId, elevation, appearance);
 }
 
 function furni(
@@ -63,9 +65,17 @@ function furni(
   id: EntityId = crypto.randomUUID(),
   levelId: RoomLevelId = DEFAULT_LEVEL_ID,
   elevation = 0,
+  appearance?: AppearanceComponent,
 ): WorldEntity {
   if (getEntityPrototype(prototypeId).kind !== 'furni') throw new Error(`${prototypeId} is not a placeable object prototype.`);
-  return { id, prototypeId, components: { transform: { levelId, position: { x, z }, rotation, ...(elevation === 0 ? {} : { elevation }) } } };
+  return {
+    id,
+    prototypeId,
+    components: {
+      transform: { levelId, position: { x, z }, rotation, ...(elevation === 0 ? {} : { elevation }) },
+      ...(appearance && Object.keys(appearance.materials).length ? { appearance } : {}),
+    },
+  };
 }
 
 export function nextRotation(rotation: RotationQuarter): RotationQuarter {
@@ -154,6 +164,10 @@ function setRuntimeComponent(components: EntityComponents, action: ComponentSetA
   if (action.component === 'visualEffects') {
     if (action.value === null) { const { visualEffects: _removed, ...rest } = components; return rest; }
     return { ...components, visualEffects: action.value };
+  }
+  if (action.component === 'appearance') {
+    if (action.value === null) { const { appearance: _removed, ...rest } = components; return rest; }
+    return { ...components, appearance: action.value };
   }
   return assertNever(action);
 }

@@ -1,9 +1,11 @@
 import { LitElement, css, html, nothing } from 'lit';
+import type { AppearanceComponent } from '../domain/material-design';
 import { catalogueThumbnail } from '../rendering/catalogue-thumbnail-renderer';
 
 export class CatalogueObjectPreview extends LitElement {
   static override properties = {
     prototypeId: { type: String, attribute: 'prototype-id' },
+    appearance: { attribute: false },
     imageUrl: { state: true },
     failed: { state: true },
   };
@@ -16,6 +18,7 @@ export class CatalogueObjectPreview extends LitElement {
   `;
 
   declare prototypeId: string;
+  declare appearance: AppearanceComponent | null;
   declare imageUrl: string;
   declare failed: boolean;
   #request = 0;
@@ -23,12 +26,13 @@ export class CatalogueObjectPreview extends LitElement {
   constructor() {
     super();
     this.prototypeId = '';
+    this.appearance = null;
     this.imageUrl = '';
     this.failed = false;
   }
 
   override updated(changed: Map<PropertyKey, unknown>): void {
-    if (changed.has('prototypeId')) this.renderThumbnail();
+    if (changed.has('prototypeId') || changed.has('appearance')) this.renderThumbnail();
   }
 
   override render() {
@@ -49,7 +53,7 @@ export class CatalogueObjectPreview extends LitElement {
     queueMicrotask(() => {
       if (request !== this.#request) return;
       try {
-        this.imageUrl = catalogueThumbnail(prototypeId);
+        this.imageUrl = catalogueThumbnail(prototypeId, this.appearance);
         this.dataset.ready = 'true';
       } catch (error) {
         console.warn(`Catalogue preview failed for ${prototypeId}.`, error);

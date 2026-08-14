@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { entityById, furniEntities, LOCAL_PLAYER_ID } from '../domain/entity-queries';
 import type { GameStore } from '../domain/game-store';
+import { materialAppearanceKey } from '../domain/material-design';
 import { FLOOR_STEP_HEIGHT, floorWorldY, levelBaseWorldY, roomLevel, topologyBounds } from '../domain/room-topology';
 import { entityElevationSteps, spatialProfileForEntity } from '../domain/spatial-index';
 import type { CellAddress, EntityId, RoomTopology, TransformComponent, WorldEntity, WorldState } from '../domain/types';
@@ -9,6 +10,7 @@ import { createPlayerInteractionDispatcher } from '../gameplay/player-interactio
 import { seatPoseForVisualTransform } from '../gameplay/seating-system';
 import { createRoomSimulation, type SimulationPipeline } from '../gameplay/simulation-pipeline';
 import type { RoomGameNetwork } from '../online/game-network';
+import { disposeRenderTree } from './dispose-render-tree';
 import { createObjectVisual } from './object-factory';
 import { ObjectMotion } from './object-motion';
 import { HumanAvatar } from './human-avatar';
@@ -22,9 +24,7 @@ import { forwardRoomNetworkChange, roomAccessProvider, syncRoomDiagnostics } fro
 import { projectWorldPointToCanvas } from './screen-projection';
 import { TeleportLinkRenderer } from './teleport-link-renderer';
 import { WallVisibilitySystem } from './wall-visibility';
-
 export type { RoomInteractionMode } from './room-interaction-controller';
-
 export class RoomScene {
   readonly #canvas: HTMLCanvasElement;
   readonly #store: GameStore;
@@ -51,7 +51,6 @@ export class RoomScene {
   readonly #unsubscribeEditor: () => void;
   #topology: RoomTopology;
   #animationFrame = 0;
-
   constructor(canvas: HTMLCanvasElement, store: GameStore, notify: (message: string) => void = () => {}, network: RoomGameNetwork | null = null) {
     this.#canvas = canvas;
     this.#store = store;
@@ -65,7 +64,6 @@ export class RoomScene {
     this.#renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.#renderer.toneMapping = THREE.NoToneMapping;
     this.#scene.background = new THREE.Color(0x152431);
-
     this.#architecture = new RoomArchitectureRenderer(store.state.topology);
     this.#topology = store.state.topology;
     const actorId = network?.actorId ?? LOCAL_PLAYER_ID;
@@ -90,9 +88,7 @@ export class RoomScene {
       this.#architecture.group, this.#player, playerInteractions, accessProvider, network,
       () => this.syncState(this.#store.state), notify,
     );
-
     this.#keyboard = new RoomKeyboardControls(store, this.#cameraController, this.#player, network, () => this.#interaction.mode);
-
     this.#unsubscribeWorld = store.subscribe((state, change) => {
       if (change.type === 'world/replaced') this.#player.syncFromWorld();
       else forwardRoomNetworkChange(this.#store, change, this.#network);
@@ -132,6 +128,7 @@ export class RoomScene {
     this.#architecture.dispose();
     this.#human.dispose();
     this.#remotes.dispose();
+    for (const object of this.#objects.values()) disposeRenderTree(object);
     this.#timer.dispose();
     this.#renderer.dispose();
   }
@@ -175,6 +172,7 @@ export class RoomScene {
     for (const [id, object] of this.#objects) {
       if (live.has(id)) continue;
       this.#objectRoot.remove(object);
+      disposeRenderTree(object);
       this.#motion.remove(id);
       this.#objects.delete(id);
     }
@@ -193,8 +191,11 @@ export class RoomScene {
     const fp = spatialProfileForEntity(entity)?.footprint ?? { width: 1, depth: 1 };
     const y = floorWorldY(this.#store.state.topology, address) + entityElevationSteps(entity) * FLOOR_STEP_HEIGHT;
     let object = this.#objects.get(entity.id);
+    if (object && object.userData.appearanceKey !== materialAppearanceKey(entity.components.appearance)) {
+      this.#objectRoot.remove(object); disposeRenderTree(object); this.#motion.remove(entity.id); this.#objects.delete(entity.id); object = undefined;
+    }
     if (!object) {
-      object = createObjectVisual(entity.prototypeId);
+      object = createObjectVisual(entity.prototypeId, entity.components.appearance);
       object.userData.entityId = entity.id;
       object.userData.levelId = transform.levelId;
       this.#objects.set(entity.id, object);

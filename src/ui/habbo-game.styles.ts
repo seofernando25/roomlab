@@ -61,6 +61,7 @@ export const habboGameStyles = css`
   .selection-panel {
     position: absolute; right: 18px; bottom: 18px; z-index: 3; width: 270px; pointer-events: auto;
   }
+  .material-studio { position:absolute; left:50%; top:50%; z-index:8; transform:translate(-50%,-50%); pointer-events:auto; filter:drop-shadow(0 8px 12px rgba(0,0,0,.34)); }
   .selection-title { font-size: 12px; font-weight: 900; color: #263b3f; }
   .selection-meta { margin-top: 3px; color: #657579; font-size: 9px; font-weight: 700; }
   .selection-chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 7px; }
@@ -85,6 +86,7 @@ export const habboGameStyles = css`
   :host([capture]) .topbar,
   :host([capture]) .catalogue,
   :host([capture]) .selection-panel,
+  :host([capture]) .material-studio,
   :host([capture]) .help,
   :host([capture]) .toast { display: none; }
   @media (max-width: 900px) {
@@ -105,6 +107,7 @@ export const habboGameStyles = css`
     .view-rotate-row button { min-height: 44px; font-size: 10px; }
     .catalogue { left: 0; right: 0; bottom: 0; width: 100%; filter: drop-shadow(0 -4px 8px rgba(0,0,0,.24)); }
     .selection-panel { left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); width: auto; }
+    .material-studio { left:0; right:0; top:auto; bottom:0; width:100%; transform:none; filter:drop-shadow(0 -5px 10px rgba(0,0,0,.3)); }
     .selection-row button { min-height: 44px; }
     .game.editor-open .selection-panel { display: none; }
     .help { display: none; }

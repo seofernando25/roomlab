@@ -9,6 +9,7 @@ import {
 } from '../domain/catalogue-registry';
 import { entityById } from '../domain/entity-queries';
 import { GameStore } from '../domain/game-store';
+import type { AppearanceComponent } from '../domain/material-design';
 import { roomLevel } from '../domain/room-topology';
 import type { EntityId, FloorFinishId, RoomEditorTool, RoomLevelId, WallFinishId, WorldState } from '../domain/types';
 import { nextRotation } from '../domain/world-state';
@@ -19,25 +20,24 @@ import { RoomScene, type RoomInteractionMode } from '../rendering/room-scene';
 import type { RoomGameNetwork } from '../online/game-network';
 import type { InventoryItemDto, RoomServerMessage } from '../online/types';
 import './catalogue-explorer';
-import './hotel-panel';
+import './material-studio';
+import './selection-inspector';
 import { habboGameStyles } from './habbo-game.styles';
 import { capabilityUiLabel, roomHelpText } from './habbo-game-copy';
+import { applyMaterialStudioTarget, selectedMaterialStudioTarget, type MaterialStudioTarget } from './habbo-material-studio';
 import { applyOnlineServerMessage, forwardPredictedInventoryPlacement } from './habbo-game-online';
-
 export class HabboGame extends LitElement {
   static override properties = {
     initialWorld: { attribute: false }, network: { attribute: false }, inventory: { attribute: false },
     roomName: { type: String }, roomSubtitle: { type: String }, canEdit: { type: Boolean },
   };
   static override styles = habboGameStyles;
-
   declare initialWorld: WorldState | null;
   declare network: RoomGameNetwork | null;
   declare inventory: readonly InventoryItemDto[] | null;
   declare roomName: string;
   declare roomSubtitle: string;
   declare canEdit: boolean;
-
   #store = new GameStore();
   #scene: RoomScene | null = null;
   #unsubscribeWorld: (() => void) | null = null;
@@ -50,13 +50,12 @@ export class HabboGame extends LitElement {
   #viewMenuOpen = false;
   #pendingPlacementItemId: string | null = null;
   #presenceCount = 1;
-
+  #materialStudio: MaterialStudioTarget | null = null;
   constructor() {
     super();
     this.initialWorld = null; this.network = null; this.inventory = null;
     this.roomName = 'Tile House'; this.roomSubtitle = 'Room Lab'; this.canEdit = true;
   }
-
   override firstUpdated(): void {
     if (this.initialWorld) this.#store = new GameStore(this.initialWorld);
     this.#unsubscribeWorld = this.#store.subscribe((_state, change) => { this.handleLocalWorldChange(change); this.requestUpdate(); });
@@ -135,6 +134,7 @@ export class HabboGame extends LitElement {
         ${catalogueVisible ? html`
           <catalogue-explorer class="catalogue" .world=${state} .editor=${editor} .inventory=${this.inventory}
             @catalogue-place-object=${this.onCataloguePlaceObject}
+            @catalogue-customize-object=${this.onCatalogueCustomizeObject}
             @catalogue-rotate-placement=${this.rotateCurrent}
             @catalogue-tool=${this.onCatalogueTool}
             @catalogue-floor-finish=${this.onCatalogueFloorFinish}
@@ -148,16 +148,16 @@ export class HabboGame extends LitElement {
             @catalogue-close=${this.closeCatalogue}></catalogue-explorer>
         ` : nothing}
 
-        ${this.#interactionMode === 'edit' && selected && selectedDefinition ? html`
-          <hotel-panel class="selection-panel" heading="Selected" tone="green" compact>
-            <div class="selection-title">${selectedDefinition.label}</div>
-            <div class="selection-meta">${getCatalogueObjectCategory(selectedDefinition.category).label} · ${floorHeightLabel(selectedLevel?.baseElevation)} · ${footprintLabel(selected.prototypeId)} footprint</div>
-            ${selectedCapabilities.length ? html`<div class="selection-chips">
-              ${selectedCapabilities.map((capability) => html`<span class="selection-chip">${capabilityUiLabel(capability.key, capability.label)}</span>`)}
-            </div>` : nothing}
-            <div class="selection-row"><button @click=${this.rotateCurrent}>Rotate 90°</button><button class="danger" @click=${this.removeSelected}>Pick up</button></div>
-          </hotel-panel>
+        ${this.#interactionMode === 'edit' && selected && selectedDefinition && !this.#materialStudio ? html`
+          <selection-inspector class="selection-panel" .label=${selectedDefinition.label}
+            .meta=${`${getCatalogueObjectCategory(selectedDefinition.category).label} · ${floorHeightLabel(selectedLevel?.baseElevation)} · ${footprintLabel(selected.prototypeId)} footprint`}
+            .capabilities=${selectedCapabilities.map((capability) => ({ label: capabilityUiLabel(capability.key, capability.label) }))}
+            .customizable=${Boolean(selectedDefinition.renderable.materialSlots?.length)}
+            @selection-rotate=${this.rotateCurrent} @selection-customize=${this.customizeSelected} @selection-pickup=${this.removeSelected}></selection-inspector>
         ` : nothing}
+        ${this.#materialStudio ? html`<material-studio class="material-studio" .prototypeId=${this.#materialStudio.prototypeId}
+          .appearance=${this.#materialStudio.appearance} .actionLabel=${this.#materialStudio.kind === 'placement' ? 'Use style & place' : 'Apply style'}
+          @material-studio-apply=${this.applyMaterialStudio} @material-studio-close=${this.closeMaterialStudio}></material-studio>` : nothing}
       </div>
     `;
   }
@@ -171,12 +171,8 @@ export class HabboGame extends LitElement {
     });
   }
 
-  debugScreenPointForPrototype(prototypeId: string): { x: number; y: number } | null {
-    return this.#scene?.debugScreenPointForPrototype(prototypeId) ?? null;
-  }
-  debugScreenPointForCell(levelId: RoomLevelId, x: number, z: number): { x: number; y: number } | null {
-    return this.#scene?.debugScreenPointForCell({ levelId, position: { x, z } }) ?? null;
-  }
+  debugScreenPointForPrototype(prototypeId: string): { x: number; y: number } | null { return this.#scene?.debugScreenPointForPrototype(prototypeId) ?? null; }
+  debugScreenPointForCell(levelId: RoomLevelId, x: number, z: number): { x: number; y: number } | null { return this.#scene?.debugScreenPointForCell({ levelId, position: { x, z } }) ?? null; }
   private handleLocalWorldChange(change: import('../domain/types').WorldChange): void {
     const result = forwardPredictedInventoryPlacement(change, this.network, this.#pendingPlacementItemId);
     if (!result.consumed) return;
@@ -184,14 +180,7 @@ export class HabboGame extends LitElement {
     this.#store.dispatchEditor({ type: 'tool/set', tool: 'select' });
   }
 
-  private helpText() {
-    return roomHelpText(
-      this.#interactionMode,
-      this.#cameraTurn,
-      this.#store.editorState,
-      this.#store.editorState.selectedEntityId !== null,
-    );
-  }
+  private helpText() { return roomHelpText(this.#interactionMode, this.#cameraTurn, this.#store.editorState, this.#store.editorState.selectedEntityId !== null); }
 
   private readonly toggleInteractionMode = (): void => {
     this.#interactionMode = this.#interactionMode === 'play' ? 'edit' : 'play';
@@ -209,13 +198,38 @@ export class HabboGame extends LitElement {
 
   private readonly onCataloguePlaceObject = (event: Event): void => {
     const { prototypeId, itemInstanceId } = (event as CustomEvent<{ prototypeId: CatalogueObjectId; itemInstanceId?: string }>).detail;
+    const item = itemInstanceId ? this.inventory?.find((candidate) => candidate.id === itemInstanceId) : undefined;
     this.#pendingPlacementItemId = itemInstanceId ?? null;
     this.#store.dispatchEditor({ type: 'placement-prototype/set', prototypeId });
+    this.#store.dispatchEditor({ type: 'placement-appearance/set', appearance: item?.appearance ?? null });
     this.#store.dispatchEditor({ type: 'tool/set', tool: 'place-prototype' });
   };
-  private readonly onCatalogueTool = (event: Event): void => {
-    this.#store.dispatchEditor({ type: 'tool/set', tool: (event as CustomEvent<{ tool: RoomEditorTool }>).detail.tool });
+  private readonly onCatalogueCustomizeObject = (event: Event): void => {
+    const detail = (event as CustomEvent<{ prototypeId: CatalogueObjectId; itemInstanceId?: string; appearance: AppearanceComponent | null }>).detail;
+    this.#materialStudio = { kind: 'placement', ...detail };
+    this.#catalogueOpen = false;
+    this.requestUpdate();
   };
+  private readonly customizeSelected = (): void => {
+    this.#materialStudio = selectedMaterialStudioTarget(this.#store);
+    if (this.#materialStudio) { this.#catalogueOpen = false; this.requestUpdate(); }
+  };
+  private readonly applyMaterialStudio = (event: Event): void => {
+    const target = this.#materialStudio;
+    if (!target) return;
+    const appearance = (event as CustomEvent<{ appearance: AppearanceComponent | null }>).detail.appearance;
+    const result = applyMaterialStudioTarget(target, appearance, this.#store, this.network);
+    if (result.pendingItemId !== undefined) this.#pendingPlacementItemId = result.pendingItemId;
+    this.#materialStudio = null;
+    result.message ? this.showMessage(result.message) : this.requestUpdate();
+  };
+  private readonly closeMaterialStudio = (): void => {
+    const returnToCatalogue = this.#materialStudio?.kind === 'placement';
+    this.#materialStudio = null;
+    if (returnToCatalogue) this.#catalogueOpen = true;
+    this.requestUpdate();
+  };
+  private readonly onCatalogueTool = (event: Event): void => { this.#store.dispatchEditor({ type: 'tool/set', tool: (event as CustomEvent<{ tool: RoomEditorTool }>).detail.tool }); };
   private readonly onCatalogueFloorFinish = (event: Event): void => {
     const { finish } = (event as CustomEvent<{ finish: FloorFinishId }>).detail;
     this.#store.dispatchEditor({ type: 'floor-finish/set', finish });
@@ -226,28 +240,18 @@ export class HabboGame extends LitElement {
     this.#store.dispatchEditor({ type: 'wall-finish/set', finish });
     this.#store.dispatchEditor({ type: 'tool/set', tool: 'wall-paint' });
   };
-  private readonly onCatalogueLevel = (event: Event): void => {
-    this.#store.dispatchEditor({ type: 'active-level/set', levelId: (event as CustomEvent<{ levelId: RoomLevelId }>).detail.levelId });
-  };
+  private readonly onCatalogueLevel = (event: Event): void => { this.#store.dispatchEditor({ type: 'active-level/set', levelId: (event as CustomEvent<{ levelId: RoomLevelId }>).detail.levelId }); };
   private readonly onCatalogueAddHeight = (): void => {
     const level = addFloorHeight(this.#store);
     this.showMessage(level ? `${floorHeightLabel(level.baseElevation)} ready. Click a ghost tile to start building there.` : 'Could not add another floor height.');
   };
-  private readonly onCatalogueNudgeHeight = (event: Event): void => {
-    const result = nudgeActiveFloorBase(this.#store, (event as CustomEvent<{ delta: number }>).detail.delta);
-    if (!result.accepted && result.message) this.showMessage(result.message);
-  };
-  private readonly onCatalogueSetHeight = (event: Event): void => {
-    const result = setActiveFloorBase(this.#store, (event as CustomEvent<{ value: number }>).detail.value);
-    if (!result.accepted && result.message) this.showMessage(result.message);
-  };
+  private readonly onCatalogueNudgeHeight = (event: Event): void => { this.showBuildError(nudgeActiveFloorBase(this.#store, (event as CustomEvent<{ delta: number }>).detail.delta)); };
+  private readonly onCatalogueSetHeight = (event: Event): void => { this.showBuildError(setActiveFloorBase(this.#store, (event as CustomEvent<{ value: number }>).detail.value)); };
   private readonly onCatalogueRemoveTeleport = (event: Event): void => {
     const id = (event as CustomEvent<{ id: EntityId }>).detail.id;
     if (removeTeleporterPair(this.#store, id)) { this.network?.removeTeleporter(id); this.showMessage('Teleport pair removed.'); }
   };
-  private readonly onCatalogueTeleportFocus = (event: Event): void => {
-    this.#scene?.setTeleportFocus((event as CustomEvent<{ id: EntityId | null }>).detail.id);
-  };
+  private readonly onCatalogueTeleportFocus = (event: Event): void => { this.#scene?.setTeleportFocus((event as CustomEvent<{ id: EntityId | null }>).detail.id); };
 
   private readonly rotateCurrent = (): void => {
     const editor = this.#store.editorState;
@@ -287,6 +291,7 @@ export class HabboGame extends LitElement {
     this.#message = message; this.requestUpdate(); window.clearTimeout(this.#messageTimer);
     this.#messageTimer = window.setTimeout(() => { this.#message = ''; this.requestUpdate(); }, 2200);
   }
+  private showBuildError(result: { accepted: boolean; message?: string }): void { if (!result.accepted && result.message) this.showMessage(result.message); }
 }
 
 

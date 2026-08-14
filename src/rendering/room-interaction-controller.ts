@@ -26,8 +26,8 @@ interface PlacementDrag {
   readonly candidate: CellAddress;
   readonly elevation: number;
   readonly valid: boolean;
+  readonly started: boolean;
 }
-
 export class RoomInteractionController {
   readonly #canvas: HTMLCanvasElement;
   readonly #scene: THREE.Scene;
@@ -137,9 +137,7 @@ export class RoomInteractionController {
     if (!entity || !isCatalogueObjectId(entity.prototypeId)) return false;
     if (entity.components.transform.levelId !== this.#store.editorState.activeLevelId) return false;
     this.#store.dispatchEditor({ type: 'selection/set', id: entity.id });
-    this.#placement = { id: entity.id, candidate: addressFor(entity), elevation: entityElevationSteps(entity), valid: true };
-    this.#motion.setHeld(entity.id, true);
-    this.#network?.beginManipulation(entity.id);
+    this.#placement = { id: entity.id, candidate: addressFor(entity), elevation: entityElevationSteps(entity), valid: true, started: false };
     return true;
   }
 
@@ -148,7 +146,8 @@ export class RoomInteractionController {
       this.#build.moveStroke(clientX, clientY);
       return;
     }
-    const placement = this.#placement;
+    let placement = this.#placement;
+    if (!placement.started) { placement = { ...placement, started: true }; this.#placement = placement; this.#canvas.dataset.dragActive = 'true'; this.#motion.setHeld(placement.id, true); this.#network?.beginManipulation(placement.id); }
     const entity = entityById(this.#store.state, placement.id);
     if (!entity) return;
     const hit = this.#picker.surfaceAt(clientX, clientY, this.#store.state.topology, this.#store.editorState.activeLevelId);
@@ -166,8 +165,8 @@ export class RoomInteractionController {
     };
     const resolved = resolveSupportedPlacement(this.#store.state, candidateEntity);
     const elevation = resolved?.components.transform.elevation ?? 0;
-    const valid = Boolean(resolved);
-    this.#placement = { id: placement.id, candidate, elevation, valid };
+    const valid = Boolean(resolved); this.#canvas.dataset.dragCandidate = `${candidate.position.x},${candidate.position.z}`; this.#canvas.dataset.dragValid = String(valid);
+    this.#placement = { id: placement.id, candidate, elevation, valid, started: true };
     this.#motion.setPlacementTarget(
       placement.id,
       position.x + fp.width / 2,
@@ -183,9 +182,10 @@ export class RoomInteractionController {
       this.#build.endStroke(clientX, clientY);
       return;
     }
+    if (!this.#placement.started) { this.#placement = null; return; }
     this.movePrimaryDrag(clientX, clientY);
     const placement = this.#placement;
-    this.#placement = null;
+    this.#placement = null; delete this.#canvas.dataset.dragActive; delete this.#canvas.dataset.dragCandidate; delete this.#canvas.dataset.dragValid;
     this.#motion.setHeld(placement.id, false);
     if (placement.valid) {
       const result = this.#store.dispatch({ type: 'transform/move', id: placement.id, address: placement.candidate, elevation: placement.elevation });
@@ -200,8 +200,8 @@ export class RoomInteractionController {
 
   private cancelPrimaryDrag(): void {
     const placement = this.#placement;
-    this.#placement = null;
-    if (placement) { this.#motion.setHeld(placement.id, false); this.#network?.cancelManipulation(placement.id); }
+    this.#placement = null; delete this.#canvas.dataset.dragActive; delete this.#canvas.dataset.dragCandidate; delete this.#canvas.dataset.dragValid;
+    if (placement?.started) { this.#motion.setHeld(placement.id, false); this.#network?.cancelManipulation(placement.id); }
     this.#build.cancelStroke();
     this.#syncWorld();
   }

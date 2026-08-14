@@ -1,3 +1,5 @@
+import type { AppearanceComponent } from './material-design';
+
 export type EntityId = string;
 export type PrototypeId = string;
 export type RoomLevelId = string;
@@ -81,6 +83,7 @@ export interface EntityComponents {
   readonly toggle?: ToggleStateComponent;
   readonly teleporter?: TeleporterStateComponent;
   readonly visualEffects?: VisualEffectStateComponent;
+  readonly appearance?: AppearanceComponent;
 }
 
 export interface WorldEntity {
@@ -117,6 +120,7 @@ export interface EditorState {
   readonly pendingAnchor: CellAddress | null;
   readonly placementPrototypeId: PrototypeId | null;
   readonly placementRotation: RotationQuarter;
+  readonly placementAppearance: AppearanceComponent | null;
 }
 
 export interface RoomCellUpdate {
@@ -167,6 +171,7 @@ export type EditorAction =
   | { readonly type: 'wall-finish/set'; readonly finish: WallFinishId }
   | { readonly type: 'placement-prototype/set'; readonly prototypeId: PrototypeId | null }
   | { readonly type: 'placement-rotation/set'; readonly rotation: RotationQuarter }
+  | { readonly type: 'placement-appearance/set'; readonly appearance: AppearanceComponent | null }
   | { readonly type: 'pending-anchor/set'; readonly cell: CellAddress | null };
 
 export interface DispatchResult {

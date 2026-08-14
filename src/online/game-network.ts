@@ -1,3 +1,4 @@
+import type { AppearanceComponent } from '../domain/material-design';
 import type { CellAddress, EntityId, TopologyAction, TransformComponent } from '../domain/types';
 
 export interface RoomGameNetwork {
@@ -15,7 +16,8 @@ export interface RoomGameNetwork {
   topology(action: TopologyAction): void;
   rotate(entityId: EntityId, rotation: 0 | 1 | 2 | 3): void;
   pickup(entityId: EntityId): void;
-  place(itemInstanceId: string, prototypeId: string, transform: TransformComponent): void;
+  place(itemInstanceId: string, prototypeId: string, transform: TransformComponent, appearance: AppearanceComponent | null): void;
+  setAppearance(entityId: EntityId, appearance: AppearanceComponent | null): void;
   createTeleporter(first: CellAddress, second: CellAddress): void;
   removeTeleporter(entityId: EntityId): void;
 }

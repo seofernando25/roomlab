@@ -229,6 +229,29 @@ try {
   await search.fill('');
   await page.screenshot({ path: 'artifacts/ui-catalogue.png', fullPage: true });
 
+  phase('material studio');
+  await search.fill('Club Chair');
+  const chairCard = catalogue.locator('.object-wrap').first();
+  await chairCard.locator('.style-action').click();
+  const materialStudio = host.locator('material-studio');
+  await materialStudio.waitFor({ state: 'visible' });
+  if (await materialStudio.locator('.slot').count() !== 3) errors.push('Material Studio: Club Chair should expose three semantic parts');
+  await materialStudio.locator('.preset').filter({ hasText: 'Fine Linen' }).click();
+  await materialStudio.locator('.saved-row input').fill('QA Linen');
+  await materialStudio.locator('.saved-row button').filter({ hasText: 'Save' }).click();
+  expectText(await materialStudio.locator('.saved-list').textContent(), 'QA Linen', 'saved material preset');
+  await page.screenshot({ path: 'artifacts/ui-material-studio.png', fullPage: true });
+  await materialStudio.locator('.apply').click();
+  await materialStudio.waitFor({ state: 'detached' });
+  const styledChairTarget = await findBuildTarget(page, 'build-place-prototype');
+  await page.mouse.click(styledChairTarget.x, styledChairTarget.y);
+  await page.waitForTimeout(140);
+  const customAppearances = await host.locator('canvas').getAttribute('data-custom-appearances');
+  if (Number(customAppearances ?? '0') < 1) errors.push('Material Studio: styled placement did not create an appearance component');
+  await page.keyboard.press('Escape');
+  await host.locator('.catalogue-open').click();
+  await catalogue.waitFor({ state: 'visible' });
+
   await search.fill('vase');
   phase('stacked vase interaction');
   await catalogue.locator('.object-card').first().click();
@@ -249,18 +272,18 @@ try {
   if (!vasePoint) throw new Error('Stacking: vase did not produce a projected screen point.');
   await page.mouse.click(vasePoint.x, vasePoint.y);
   await page.waitForTimeout(30);
-  expectText(await host.locator('.selection-title').textContent(), 'Ceramic Vase', 'visible stacked decor selection');
+  expectText(await host.locator('.selection-panel .title').textContent(), 'Ceramic Vase', 'visible stacked decor selection');
   await page.mouse.move(vasePoint.x, vasePoint.y);
   await page.mouse.down();
   await page.mouse.move(vasePoint.x + 110, vasePoint.y - 20, { steps: 6 });
   await page.mouse.up();
   await page.waitForTimeout(120);
-  expectText(await host.locator('.selection-title').textContent(), 'Ceramic Vase', 'dragging stacked decor selects the vase');
+  expectText(await host.locator('.selection-panel .title').textContent(), 'Ceramic Vase', 'dragging stacked decor selects the vase');
   await host.locator('.selection-panel .danger').click();
   await page.waitForTimeout(80);
   await page.mouse.click(sofaTarget.x, sofaTarget.y);
   await page.waitForTimeout(40);
-  expectText(await host.locator('.selection-title').textContent(), 'Mint Sofa', 'sofa remains after vase pickup');
+  expectText(await host.locator('.selection-panel .title').textContent(), 'Mint Sofa', 'sofa remains after vase pickup');
   await host.locator('.catalogue-open').click();
   await catalogue.waitFor({ state: 'visible' });
   await search.fill('');
@@ -384,6 +407,7 @@ try {
       'artifacts/room.png',
       'artifacts/ui-view-menu.png',
       'artifacts/ui-catalogue.png',
+      'artifacts/ui-material-studio.png',
       'artifacts/ui-floor-height.png',
       'artifacts/ui-object-stacking.png',
       'artifacts/ui-walls.png',

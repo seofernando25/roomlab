@@ -101,7 +101,10 @@ export function commitWallPaint(
 export function placePrototypeAt(store: GameStore, address: CellAddress): BuildOperationResult {
   const prototypeId = store.editorState.placementPrototypeId;
   if (!prototypeId) return { accepted: false, message: 'Choose an object from the Catalogue first.' };
-  const probe = createFurniEntity(prototypeId, address.position, store.editorState.placementRotation, crypto.randomUUID(), address.levelId);
+  const probe = createFurniEntity(
+    prototypeId, address.position, store.editorState.placementRotation, crypto.randomUUID(), address.levelId, 0,
+    store.editorState.placementAppearance ?? undefined,
+  );
   const entity = resolveSupportedPlacement(store.state, probe);
   if (!entity) return { accepted: false, message: 'That object does not fit here.' };
   return store.dispatch({ type: 'entity/add', entity }).accepted ? { accepted: true } : { accepted: false, message: 'Could not place that object.' };
