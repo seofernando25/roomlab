@@ -15,13 +15,15 @@ export class OnlineRoomPage extends LitElement {
   declare roomId: string;
   static override styles = css`
     :host{display:block;position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;overflow:hidden;background:#102635;z-index:1;overscroll-behavior:none;touch-action:manipulation}
-    habbo-game{display:block;width:100%;height:100%}
+    habbo-game{display:block;width:100%;height:100%;--room-topbar-left:240px}
     .loading{position:absolute;inset:0;display:grid;place-items:center;color:#dff5ff;font:700 15px system-ui;background:#102635}
-    .back,.settings{position:fixed;bottom:16px;z-index:80;min-height:40px;border:1px solid #8cc9e9;border-radius:9px;padding:9px 13px;color:#fff;font:800 13px system-ui;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+    .back,.settings{position:fixed;top:16px;z-index:80;min-height:40px;border:1px solid #8cc9e9;border-radius:9px;padding:9px 13px;color:#fff;font:800 13px system-ui;box-shadow:0 4px 16px rgba(0,0,0,.25)}
     .back{left:16px;background:#0a527d}.settings{left:112px;background:#123d58}
     .status{position:fixed;right:16px;bottom:16px;z-index:80;padding:7px 10px;border-radius:999px;background:#08263b;color:#bde6f7;border:1px solid #317b9e;font:700 11px system-ui}
     .toast{position:fixed;left:50%;bottom:62px;z-index:90;max-width:min(360px,calc(100vw - 24px));transform:translateX(-50%);padding:9px 13px;border-radius:8px;background:#7b2e38;color:#fff;font:700 12px system-ui;text-align:center}
-    @media(max-width:680px){
+    habbo-game[material-studio-open]~.back,habbo-game[material-studio-open]~.settings,habbo-game[material-studio-open]~.status{display:none}
+    @media(max-width:1000px){
+      habbo-game{--room-topbar-left:64px}
       .back,.settings{left:10px;bottom:auto;width:44px;height:44px;min-height:44px;padding:0;display:grid;place-items:center;font-size:0;border-radius:10px}
       .back{top:calc(10px + env(safe-area-inset-top))}.back::before{content:'←';font-size:22px}
       .settings{top:calc(60px + env(safe-area-inset-top))}.settings::before{content:'⚙';font-size:19px}
@@ -66,7 +68,8 @@ export class OnlineRoomPage extends LitElement {
       .roomName=${join.room.name}
       .roomSubtitle=${`by ${join.room.ownerUsername}`}
       .canEdit=${join.room.role!=='visitor'}
-      @inventory-refresh=${this.refreshInventory}></habbo-game>`)}
+      @inventory-refresh=${this.refreshInventory}
+      @inventory-item-pending=${this.onInventoryItemPending}></habbo-game>`)}
       <button class="back" aria-label="Back to rooms" @click=${this.leave}>← Rooms</button>
       ${join.room.role==='owner'?html`<button class="settings" aria-label="Room settings" @click=${()=>{this.#settingsOpen=true;this.requestUpdate();}}>Room settings</button>`:null}
       ${this.#status === 'connected' ? null : html`<div class="status ${this.#status}">${statusLabel(this.#status)}</div>`}
@@ -105,6 +108,11 @@ export class OnlineRoomPage extends LitElement {
   }
   private onMessage(message:RoomServerMessage):void{
     this.#network?.observe(message);
+    if(message.type==='inventory'){
+      this.#inventory=message.items;
+      this.requestUpdate();
+      return;
+    }
     if(message.type==='role'){
       this.#network?.updateRole(message.role);
       if(this.#join)this.#join={...this.#join,room:{...this.#join.room,role:message.role}};
@@ -112,10 +120,14 @@ export class OnlineRoomPage extends LitElement {
       return;
     }
     if (message.type !== 'manipulation' || message.userId !== this.account.id) this.game()?.applyServerMessage(message);
-    if(message.type==='world')void this.refreshInventory();
   }
   private game():HabboGame|null{return this.renderRoot.querySelector('habbo-game') as HabboGame|null;}
   private readonly refreshInventory=async():Promise<void>=>{try{this.#inventory=await api.inventory();this.requestUpdate();}catch{/* keep the last known inventory while reconnecting */}};
+  private readonly onInventoryItemPending=(event:Event):void=>{
+    const {id,state}=(event as CustomEvent<{id:string;state:'inventory'|'placed'}>).detail;
+    this.#inventory=this.#inventory.map((item)=>item.id!==id?item:{...item,state,roomId:state==='placed'?this.roomId:null,entityId:state==='inventory'?null:item.entityId});
+    this.requestUpdate();
+  };
   private readonly onSettingsUpdated=(event:Event):void=>{const room=(event as CustomEvent<JoinRoomDto['room']>).detail;if(this.#join)this.#join={...this.#join,room};this.requestUpdate();};
   private readonly preventBrowserPinch=(event:TouchEvent):void=>{if(event.touches.length<2)return;if(event.composedPath().some((node)=>node instanceof HTMLCanvasElement))return;event.preventDefault();};
   private readonly preventBrowserGesture=(event:Event):void=>{if(event.composedPath().some((node)=>node instanceof HTMLCanvasElement))return;event.preventDefault();};

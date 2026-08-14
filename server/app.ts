@@ -1,6 +1,7 @@
 import { openapi } from '@elysia/openapi';
 import { staticPlugin } from '@elysia/static';
 import { Elysia, t } from 'elysia';
+import { resolve } from 'node:path';
 import { accountForToken, SESSION_COOKIE } from './auth-service';
 import { seedStoreOffers } from './economy-service';
 import { LiveRoomManager } from './live-room-manager';
@@ -12,6 +13,7 @@ import { createFriendRoutes } from './routes-friends';
 import { createRoomRoutes } from './routes-rooms';
 
 export const liveRooms = new LiveRoomManager();
+const DIST_DIR = resolve(import.meta.dir, '..', 'dist');
 seedStoreOffers();
 
 export const app = new Elysia({ websocket: { idleTimeout: 60, maxPayloadLength: 64 * 1024 } })
@@ -44,7 +46,7 @@ export const app = new Elysia({ websocket: { idleTimeout: 60, maxPayloadLength: 
     },
     close(ws) { liveRooms.detach(ws.id); },
   })
-  .use(staticPlugin({ assets: 'dist', prefix: '', indexHTML: true, headers: { 'cache-control': 'no-cache' } }))
+  .use(staticPlugin({ assets: DIST_DIR, prefix: '', indexHTML: true, headers: { 'cache-control': 'no-cache' } }))
   .get('/rooms', spaIndex)
   .get('/shop', spaIndex)
   .get('/items', spaIndex)
@@ -52,6 +54,6 @@ export const app = new Elysia({ websocket: { idleTimeout: 60, maxPayloadLength: 
   .get('/me', spaIndex)
   .get('/room/:id', spaIndex);
 
-function spaIndex() { return Bun.file('dist/index.html'); }
+function spaIndex() { return Bun.file(resolve(DIST_DIR, 'index.html')); }
 
 export type App = typeof app;

@@ -39,8 +39,8 @@ export class TeleportLinkRenderer {
     for (const [index, pair] of teleporterPairs(world).entries()) {
       const ta = pair.first.components.transform;
       const tb = pair.second.components.transform;
-      const a = { levelId: ta.levelId, position: ta.position };
-      const b = { levelId: tb.levelId, position: tb.position };
+      const a = { y: ta.y, position: ta.position };
+      const b = { y: tb.y, position: tb.position };
       const ay = floorWorldY(world.topology, a) + 0.22;
       const by = floorWorldY(world.topology, b) + 0.22;
       const middleY = Math.max(ay, by) + 0.34 + Math.min(0.45, Math.hypot(b.position.x - a.position.x, b.position.z - a.position.z) * 0.035);

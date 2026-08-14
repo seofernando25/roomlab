@@ -29,8 +29,8 @@ export function createTeleporterPair(store: GameStore, first: CellAddress, secon
   if (sameAddress(first, second)) return false;
   const firstId = crypto.randomUUID();
   const secondId = crypto.randomUUID();
-  const firstEntity = withTarget(createFurniEntity('tile.teleporter', first.position, 0, firstId, first.levelId), secondId);
-  const secondEntity = withTarget(createFurniEntity('tile.teleporter', second.position, 0, secondId, second.levelId), firstId);
+  const firstEntity = withTarget(createFurniEntity('tile.teleporter', first.position, 0, firstId, first.y), secondId);
+  const secondEntity = withTarget(createFurniEntity('tile.teleporter', second.position, 0, secondId, second.y), firstId);
   return store.dispatchBatch([
     { type: 'entity/add', entity: firstEntity },
     { type: 'entity/add', entity: secondEntity },
@@ -58,5 +58,5 @@ function withTarget(entity: WorldEntity, targetEntityId: EntityId): WorldEntity 
 }
 
 function sameAddress(a: CellAddress, b: CellAddress): boolean {
-  return a.levelId === b.levelId && a.position.x === b.position.x && a.position.z === b.position.z;
+  return Math.abs(a.y-b.y)<0.000001 && a.position.x === b.position.x && a.position.z === b.position.z;
 }

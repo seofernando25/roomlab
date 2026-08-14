@@ -31,7 +31,8 @@ export interface TeleportCapability extends CapabilityBase { readonly paired: bo
 /** Optional navigation affordance layered onto an otherwise ordinary placeable entity. */
 export interface TraversalCapability extends CapabilityBase {
   readonly mode: 'steps' | 'ramp';
-  readonly maxRiseSteps: number;
+  /** Maximum world-space Y the piece can bridge above its lowest reachable slab. */
+  readonly maxRise: number;
 }
 export interface RollerCapability extends CapabilityBase { readonly speed: number; }
 export interface DispenserCapability extends CapabilityBase { readonly handItem: string; }

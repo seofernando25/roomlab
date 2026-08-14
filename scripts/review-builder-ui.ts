@@ -68,7 +68,7 @@ Implementation facts you may use only to understand intended behavior:
 - Edit mode has Furni and Build as sibling modes.
 - Floor tools: Paint, Restore, Extend, Erase, Raise, Lower. Extend is intended to work by hovering one ghost tile just OUTSIDE a room edge and clicking it. The room may become irregular; west/north growth deterministically rebases coordinates behind the scenes.
 - A one-level ledge is auto-walkable. Taller 2-level rises need a physical traversal piece.
-- The old abstract 'Connect stairs' tool is intentionally gone. Stairs are placeable entity pieces: Block Steps, Glass Stairs, Metal Catwalk Stairs, Industrial Ramp. They require a clear lower tile adjacent to a tile exactly two elevation levels higher. The placement arrow points uphill; R rotates; if only one orientation works, placement auto-orients. Flat landings plus rotated pieces can create turns.
+- The old abstract 'Connect stairs' tool is intentionally gone. Stairs are placeable entity pieces: Block Steps, Glass Stairs, Metal Catwalk Stairs, Industrial Ramp. They bridge a raised slab within the prototype's world-space max rise from the stair's actual bottom Y, so stacked stairs naturally extend upward. There is no topology-level/storey concept. Flat landings plus rotated pieces can create turns.
 - Invalid floor/wall/stair/teleporter targets show a red preflight highlight; valid targets use the normal build highlight.
 - Teleporters use a two-click A then B flow, create a bidirectional pair atomically, list pairs without UUIDs, and show an in-room dashed link while Travel is active. In Play, clicking an endpoint makes the avatar walk to it before teleporting.
 - Walls snap to cell edges and are separate from floor architecture.

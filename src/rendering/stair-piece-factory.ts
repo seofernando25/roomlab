@@ -1,9 +1,8 @@
 import * as THREE from 'three';
-import { FLOOR_STEP_HEIGHT } from '../domain/room-topology';
 import { glassMaterial, palette, toon } from './materials';
 import { tagMaterialSlot } from './object-material-appearance';
 
-const RISE = FLOOR_STEP_HEIGHT * 2;
+const RISE = 0.56;
 const WIDTH = 0.78;
 const RUN = 0.88;
 

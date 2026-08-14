@@ -4,10 +4,11 @@ import { materialAppearanceError } from '../src/domain/material-appearance-rules
 import type { AppearanceComponent } from '../src/domain/material-design';
 import { getEntityPrototype } from '../src/domain/prototype-registry';
 import { roomCellAt } from '../src/domain/room-topology';
+import { stackGroupIds, translatedStackTransforms } from '../src/domain/stack-support';
 import type { CellAddress, EntityId, TransformComponent, WorldAction } from '../src/domain/types';
 import { validateWorldState } from '../src/domain/world-validation';
 import { createFurniEntity, reduceWorld } from '../src/domain/world-state';
-import { seatTargetsFor } from '../src/gameplay/seating-system';
+import { automaticSeatAssignments, seatTargetsFor } from '../src/gameplay/seating-system';
 import type { RoomClientMessage } from '../src/online/types';
 import { inventoryItem, placedItemOwner, reserveInventoryItemForRoom, returnPlacedItem, updatePlacedItemAppearance } from './economy-service';
 import { transaction } from './database';
@@ -17,6 +18,8 @@ import { saveRoomWorldInTransaction } from './room-repository';
 
 export interface CommandPublisher {
   broadcastWorld(room: LiveRoom): void;
+  sendInventory(room: LiveRoom, userId: string): void;
+  broadcastChat(room: LiveRoom, member: Member, chatId: string, text: string): void;
   broadcastManipulation(room: LiveRoom, member: Member, lease: ManipulationLease, transform: TransformComponent, lift: number): void;
   broadcastManipulationEnd(room: LiveRoom, lease: ManipulationLease): void;
 }
@@ -32,6 +35,7 @@ export class LiveRoomCommands {
       return;
     }
     if (message.type === 'stand') { member.pendingSeat = null; member.motion.stand(); return; }
+    if (message.type === 'chat') { this.chat(room, member, message.chatId, message.text); return; }
     if (message.type === 'teleport-use') { if (!member.motion.useTeleporter(message.targetEntityId, room.store.state)) throw new Error('That teleporter cannot be used.'); member.pendingSeat = null; return; }
     if (message.type === 'sit') { this.sit(room, member, message.targetEntityId, message.seatIndex); return; }
     if (message.type === 'manipulation-begin') { this.beginManipulation(room, member, message.entityId); return; }
@@ -52,10 +56,22 @@ export class LiveRoomCommands {
     this.publisher.broadcastManipulationEnd(room, lease);
   }
 
+  private chat(room: LiveRoom, member: Member, chatId: string, raw: string): void {
+    const text = raw.trim().replace(/\s+/g, ' ');
+    if (!text) throw new Error('Say something first.');
+    if (text.length > 160) throw new Error('Chat messages can use up to 160 characters.');
+    const now = Date.now();
+    if (now - member.lastChatAt < 350) throw new Error('You are sending messages too quickly.');
+    member.lastChatAt = now;
+    this.publisher.broadcastChat(room, member, chatId, text);
+  }
+
   private sit(room: LiveRoom, member: Member, targetEntityId: string, seatIndex?: number): void {
     const target = entityById(room.store.state, targetEntityId);
     const seats = target ? seatTargetsFor(target) : [];
     const seat = seatIndex === undefined ? seats[0] : seats[seatIndex];
+    const currentSeat = member.motion.seatedTarget;
+    if (seat && member.motion.seatedOn === targetEntityId && currentSeat?.seatIndex === seat.seatIndex) return;
     if (!seat || !member.motion.sitAt(seat, room.store.state)) throw new Error('That seat is not available.');
     member.pendingSeat = { entityId: targetEntityId, seatIndex: seat.seatIndex };
   }
@@ -64,7 +80,9 @@ export class LiveRoomCommands {
     assertEditor(member);
     const entity = entityById(room.store.state, entityId);
     if (!entity || getEntityPrototype(entity.prototypeId).kind !== 'furni') throw new Error('That object cannot be moved.');
-    if ([...room.manipulations.values()].some((lease) => lease.entityId === entityId)) throw new Error('Someone else is moving that object.');
+    const group = new Set(stackGroupIds(room.store.state, entityId));
+    const overlapsLease = [...room.manipulations.values()].some((lease) => stackGroupIds(room.store.state, lease.entityId).some((id) => group.has(id)));
+    if (overlapsLease) throw new Error('Someone else is moving part of that stack.');
     const lease: ManipulationLease = { id: randomUUID(), entityId, userId: member.userId, original: entity.components.transform, expiresAt: Date.now() + 10_000 };
     room.manipulations.set(lease.id, lease);
     this.publisher.broadcastManipulation(room, member, lease, lease.original, 0.18);
@@ -72,6 +90,8 @@ export class LiveRoomCommands {
 
   private updateManipulation(room: LiveRoom, member: Member, leaseId: string, transform: TransformComponent, lift: number): void {
     const lease = this.requireLease(room, member, leaseId);
+    const transforms = translatedStackTransforms(room.store.state, lease.entityId, transform);
+    if (!transforms.length || reduceWorld(room.store.state, { type: 'entity-group/transform', transforms }) === room.store.state) return;
     lease.expiresAt = Date.now() + 10_000;
     this.publisher.broadcastManipulation(room, member, lease, transform, lift);
   }
@@ -80,9 +100,10 @@ export class LiveRoomCommands {
     const lease = this.requireLease(room, member, leaseId);
     assertEditor(member);
     const before = room.store.state;
-    const action: WorldAction = { type: 'transform/set', id: lease.entityId, transform };
+    const transforms = translatedStackTransforms(room.store.state, lease.entityId, transform);
+    const action: WorldAction = { type: 'entity-group/transform', transforms };
     if (!room.store.dispatch(action).accepted) throw new Error('That furniture move is not valid.');
-    this.syncSeatedActors(room, lease.entityId);
+    for (const entry of transforms) this.syncSeatedActors(room, entry.id);
     const validation = validateWorldState(room.store.state);
     if (!validation.valid) {
       room.store.replaceFromServer(before);
@@ -112,7 +133,7 @@ export class LiveRoomCommands {
       const appearanceError = materialAppearanceError(prototypeId, appearance);
       if (appearanceError) throw new Error(appearanceError);
     }
-    const entity = createFurniEntity(prototypeId, transform.position, transform.rotation, randomUUID(), transform.levelId, transform.elevation ?? 0, appearance ?? undefined);
+    const entity = createFurniEntity(prototypeId, transform.position, transform.rotation, randomUUID(), transform.y, appearance ?? undefined);
     const action: WorldAction = { type: 'entity/add', entity };
     const preview = reduceWorld(room.store.state, action);
     if (preview === room.store.state) throw new Error('That item does not fit there.');
@@ -121,7 +142,9 @@ export class LiveRoomCommands {
       saveRoomWorldInTransaction(room.roomId, preview);
     });
     room.store.dispatch(action);
+    this.syncSeatedActors(room, entity.id);
     this.publisher.broadcastWorld(room);
+    this.publisher.sendInventory(room, member.userId);
   }
 
   private setAppearance(room: LiveRoom, member: Member, entityId: EntityId, appearance: AppearanceComponent | null): void {
@@ -143,6 +166,7 @@ export class LiveRoomCommands {
     });
     room.store.dispatch(action);
     this.publisher.broadcastWorld(room);
+    if (itemOwnerId) this.publisher.sendInventory(room, itemOwnerId);
   }
 
   private pickupEntity(room: LiveRoom, member: Member, entityId: EntityId): void {
@@ -153,13 +177,14 @@ export class LiveRoomCommands {
     if (ownerId !== member.userId && member.role !== 'owner') throw new Error('Only the item owner or room owner can pick that up.');
     const action: WorldAction = { type: 'entity/remove', id: entityId };
     const preview = reduceWorld(room.store.state, action);
-    if (preview === room.store.state) throw new Error('Move anything stacked on this object first.');
+    if (preview === room.store.state) throw new Error('Pick up the items resting on this object first.');
     transaction(() => {
       returnPlacedItem(ownerId, room.roomId, entityId);
       saveRoomWorldInTransaction(room.roomId, preview);
     });
     room.store.dispatch(action);
     this.publisher.broadcastWorld(room);
+    this.publisher.sendInventory(room, ownerId);
   }
 
   private persistAction(room: LiveRoom, member: Member, action: WorldAction): void {
@@ -168,6 +193,7 @@ export class LiveRoomCommands {
     if (preview === room.store.state) throw new Error('That room edit is not valid.');
     transaction(() => saveRoomWorldInTransaction(room.roomId, preview));
     room.store.dispatch(action);
+    if (action.type === 'transform/rotate') this.syncSeatedActors(room, action.id);
     this.publisher.broadcastWorld(room);
   }
 
@@ -218,7 +244,7 @@ export class LiveRoomCommands {
       if (!target) continue;
       if (actorEntity && actor?.seatedOn === seatEntityId) {
         const actions: WorldAction[] = [];
-        const currentCell = { levelId: actorEntity.components.transform.levelId, position: actorEntity.components.transform.position };
+        const currentCell = { y: actorEntity.components.transform.y, position: actorEntity.components.transform.position };
         if (!sameAddress(currentCell, target.cell)) actions.push({ type: 'transform/move', id: attached.actorId, address: target.cell, validatePlacement: false });
         if (actor.pose !== 'sit' || actor.direction !== target.direction || actor.seatedOn !== seatEntityId || actor.seatIndex !== seatIndex) {
           actions.push({ type: 'component/set', id: attached.actorId, component: 'actor', value: { ...actor, pose: 'sit', direction: target.direction, seatedOn: seatEntityId, seatIndex } });
@@ -226,6 +252,12 @@ export class LiveRoomCommands {
         if (actions.length) room.store.dispatchBatch(actions);
         attached.motion.syncFromWorld();
       } else attached.motion.sitAt(target, room.store.state);
+    }
+
+    for (const assignment of automaticSeatAssignments(room.store.state, seatEntityId)) {
+      const attached = [...room.members.values()].find((candidate) => candidate.actorId === assignment.actorId);
+      if (!attached || attached.motion.pose !== 'stand') continue;
+      if (attached.motion.sitAt(assignment.target, room.store.state)) attached.pendingSeat = null;
     }
   }
 

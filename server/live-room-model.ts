@@ -1,7 +1,6 @@
 import { entityById } from '../src/domain/entity-queries';
 import type { GameStore } from '../src/domain/game-store';
 import type { InteractionAccessContext, InteractionAccessProvider, RoomRightLevel } from '../src/domain/interaction-types';
-import { sortedLevels } from '../src/domain/room-topology';
 import type { CellAddress, EntityId, TransformComponent, WorldEntity, WorldState } from '../src/domain/types';
 import type { RoomId, RoomRole, RoomServerMessage, UserId } from '../src/online/types';
 import type { ActorMotionSystem } from '../src/gameplay/actor-motion-system';
@@ -22,6 +21,8 @@ export interface Member {
   lastClientSequence: number;
   readonly commands: Map<string, number>;
   lastActorKey: string;
+  lastActorSentAt: number;
+  lastChatAt: number;
   pendingSeat: { entityId: EntityId; seatIndex: number } | null;
 }
 export interface ManipulationLease {
@@ -41,15 +42,14 @@ export interface LiveRoom {
 }
 
 export function actorEntity(id: EntityId, address: CellAddress): WorldEntity {
-  return { id, prototypeId: 'actor.local-player', components: { transform: { levelId: address.levelId, position: address.position, rotation: 0 }, actor: { pose: 'stand', direction: 3 } } };
+  return { id, prototypeId: 'actor.local-player', components: { transform: { y: address.y, position: address.position, rotation: 0 }, actor: { pose: 'stand', direction: 3 } } };
 }
 
 export function spawnCell(state: WorldState, actorId: EntityId): CellAddress {
-  for (const level of sortedLevels(state.topology)) {
-    for (const cell of level.cells) {
-      const address = { levelId: level.id, position: cell.position };
-      if (canTraverseCell({ actorId, state }, address)) return address;
-    }
+  const cells = [...state.topology.cells].sort((a,b) => a.y - b.y || a.position.z - b.position.z || a.position.x - b.position.x);
+  for (const cell of cells) {
+    const address = { y: cell.y, position: cell.position };
+    if (canTraverseCell({ actorId, state }, address)) return address;
   }
   throw new Error('This room has no walkable floor.');
 }
@@ -77,9 +77,9 @@ function rightForRole(role: RoomRole): RoomRightLevel {
 }
 
 export function teleporterEntity(id: string, targetEntityId: string, address: CellAddress): WorldEntity {
-  return { id, prototypeId: 'tile.teleporter', components: { transform: { levelId: address.levelId, position: address.position, rotation: 0 }, teleporter: { targetEntityId } } };
+  return { id, prototypeId: 'tile.teleporter', components: { transform: { y: address.y, position: address.position, rotation: 0 }, teleporter: { targetEntityId } } };
 }
 
 export function sameAddress(a: CellAddress, b: CellAddress): boolean {
-  return a.levelId === b.levelId && a.position.x === b.position.x && a.position.z === b.position.z;
+  return Math.abs(a.y - b.y) < 0.000001 && a.position.x === b.position.x && a.position.z === b.position.z;
 }

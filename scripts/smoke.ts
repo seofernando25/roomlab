@@ -21,13 +21,13 @@ function phase(label: string): void {
 
 interface HoverState {
   readonly cell: string;
-  readonly level: string;
+  readonly hoverY: string;
   readonly action: string;
   readonly kind: string;
   readonly wall: string;
   readonly valid: string;
   readonly playerCell: string;
-  readonly playerLevel: string;
+  readonly playerY: string;
   readonly pose: string;
 }
 
@@ -54,17 +54,17 @@ async function hoverState(page: Page): Promise<HoverState> {
   return page.evaluate(() => {
     const canvas = document.querySelector('habbo-game')?.shadowRoot?.querySelector('canvas');
     if (!(canvas instanceof HTMLCanvasElement)) {
-      return { cell: '', level: '', action: '', kind: '', wall: '', valid: '', playerCell: '', playerLevel: '', pose: '' };
+      return { cell: '', hoverY: '', action: '', kind: '', wall: '', valid: '', playerCell: '', playerY: '', pose: '' };
     }
     return {
       cell: canvas.dataset.hoverCell ?? '',
-      level: canvas.dataset.hoverLevel ?? '',
+      hoverY: canvas.dataset.hoverY ?? '',
       action: canvas.dataset.hoverAction ?? '',
       kind: canvas.dataset.hoverObjectKind ?? '',
       wall: canvas.dataset.hoverWall ?? '',
       valid: canvas.dataset.hoverValid ?? '',
       playerCell: canvas.dataset.playerCell ?? '',
-      playerLevel: canvas.dataset.playerLevel ?? '',
+      playerY: canvas.dataset.playerY ?? '',
       pose: canvas.dataset.playerPose ?? '',
     };
   });
@@ -175,6 +175,16 @@ try {
   await page.keyboard.up('q');
   await viewMenu.locator('.turn-select').selectOption('snap-90');
   await host.locator('.view-open').click();
+  const cameraBeforeKeys = await host.locator('canvas').getAttribute('data-camera-state');
+  await page.keyboard.press('Equal');
+  await page.waitForTimeout(240);
+  const cameraAfterZoomIn = await host.locator('canvas').getAttribute('data-camera-state');
+  await page.keyboard.press('Minus');
+  await page.waitForTimeout(240);
+  const cameraAfterZoomOut = await host.locator('canvas').getAttribute('data-camera-state');
+  const cameraView = (value: string | null) => Number(value?.split(',')[2]);
+  if (!(cameraView(cameraAfterZoomIn) < cameraView(cameraBeforeKeys))) errors.push('camera keyboard: = should zoom in without Shift');
+  if (!(cameraView(cameraAfterZoomOut) > cameraView(cameraAfterZoomIn))) errors.push('camera keyboard: - should zoom out');
 
   const sofaTarget = await findHoverTarget(page, 'sit', (state) => state.kind === 'sofa');
   phase('play targeting');
@@ -209,7 +219,7 @@ try {
       return image instanceof HTMLImageElement && image.naturalWidth > 0 && image.naturalHeight > 0;
     });
   }, undefined, { timeout: 8_000 });
-  if (await catalogue.locator('.rail button').count() !== 4) errors.push('Catalogue: expected four primary sections');
+  if (await catalogue.locator('.rail button').count() !== 5) errors.push('Catalogue: expected five primary sections including Materials');
   if (await catalogue.locator('.object-card').count() !== 15) errors.push('Catalogue: expected 15 placeable objects');
   if (await host.locator('.controls > .mode-btn, .controls > .catalogue-open, .controls > .view-control > .view-open').count() !== 3) {
     errors.push('edit controls: expected Done, Catalogue and View as primary controls');
@@ -227,12 +237,18 @@ try {
   }, undefined, { timeout: 2_000 });
   if (await catalogue.locator('.object-card').count() !== 1) errors.push('Catalogue search: expected one Mint Sofa result');
   await search.fill('');
+  const placementPlane = catalogue.locator('.placement-plane');
+  if (await placementPlane.count() !== 1) errors.push('Catalogue: expected one global virtual placement plane control');
+  const planeNumber = placementPlane.locator('.plane-number');
+  const planeSlider = placementPlane.locator('.plane-slider');
+  if (await planeNumber.inputValue() !== '0.00') errors.push('Catalogue: placement plane should start at Y 0.00');
+  const objectGridScroll = await catalogue.locator('.grid').evaluate((element: HTMLElement) => ({ width: element.clientWidth, scrollWidth: element.scrollWidth }));
+  if (objectGridScroll.scrollWidth <= objectGridScroll.width + 40) errors.push('Catalogue: desktop object tray should scroll horizontally when inventory overflows');
   await page.screenshot({ path: 'artifacts/ui-catalogue.png', fullPage: true });
 
   phase('material studio');
-  await search.fill('Club Chair');
-  const chairCard = catalogue.locator('.object-wrap').first();
-  await chairCard.locator('.style-action').click();
+  await catalogue.locator('.object-card').first().click();
+  await catalogue.locator('.rail button').filter({ hasText: 'Materials' }).click();
   const materialStudio = host.locator('material-studio');
   await materialStudio.waitFor({ state: 'visible' });
   await page.waitForTimeout(20);
@@ -241,22 +257,20 @@ try {
     closeFocused: Boolean(element.shadowRoot?.activeElement?.classList?.contains('close-studio')),
   }));
   if (studioA11y.role !== 'dialog' || studioA11y.modal !== 'true' || !studioA11y.closeFocused) errors.push('Material Studio: modal semantics or initial focus are missing');
-  if (await materialStudio.locator('.slot').count() !== 3) errors.push('Material Studio: Club Chair should expose three semantic parts');
+  if (await materialStudio.locator('catalogue-object-preview').count()) errors.push('Material Studio: furniture preview should not appear in standalone material workspace');
+  const swatch = materialStudio.locator('material-swatch-preview canvas');
+  await swatch.waitFor({ state: 'visible' });
+  const swatchBox = await swatch.boundingBox();
+  if (!swatchBox || Math.abs(swatchBox.width - swatchBox.height) > 2) errors.push('Material Studio: texture preview should be square');
   await materialStudio.locator('.preset').filter({ hasText: 'Fine Linen' }).click();
   await materialStudio.locator('.saved-row input').fill('QA Linen');
   await materialStudio.locator('.saved-row button').filter({ hasText: 'Save' }).click();
   expectText(await materialStudio.locator('.saved-list').textContent(), 'QA Linen', 'saved material preset');
   await page.screenshot({ path: 'artifacts/ui-material-studio.png', fullPage: true });
-  await materialStudio.locator('.apply').click();
+  await materialStudio.locator('.footer .action').filter({ hasText: 'Done' }).click();
   await materialStudio.waitFor({ state: 'detached' });
-  const styledChairTarget = await findBuildTarget(page, 'build-place-prototype');
-  await page.mouse.click(styledChairTarget.x, styledChairTarget.y);
-  await page.waitForTimeout(140);
-  const customAppearances = await host.locator('canvas').getAttribute('data-custom-appearances');
-  if (Number(customAppearances ?? '0') < 1) errors.push('Material Studio: styled placement did not create an appearance component');
-  await page.keyboard.press('Escape');
-  await host.locator('.catalogue-open').click();
   await catalogue.waitFor({ state: 'visible' });
+  if (await catalogue.locator('.object-card.active').count()) errors.push('Material Studio: entering the standalone workspace should cancel hidden object placement state');
 
   await search.fill('vase');
   phase('stacked vase interaction');
@@ -301,51 +315,52 @@ try {
 
   await floorTab.click();
   phase('floor tools');
-  expectText(await catalogue.locator('.tool-card.active').textContent(), 'Shape', 'Floor default tool');
+  if (await catalogue.locator('.placement-plane').count() !== 1) errors.push('Catalogue: virtual placement plane should remain available for floor slabs');
+  expectText(await catalogue.locator('.tool-card.active').textContent(), 'Slab', 'Floor default tool');
   await findBuildTarget(page, 'build-floor-shape');
 
   await objectsTab.click();
+  if (await catalogue.locator('.placement-plane').count() !== 1) errors.push('Catalogue: object placement should share the same virtual placement plane');
   await search.fill('Block Steps');
   await catalogue.locator('.object-card').first().click();
-  expectText(await catalogue.locator('.active-tool').textContent(), 'Placing Block Steps', 'Object placement status');
+  if (await catalogue.locator('.active-tool').count()) errors.push('Catalogue: placement tutorial card should not be rendered');
   await floorTab.click();
-  expectText(await catalogue.locator('.tool-card.active').textContent(), 'Shape', 'Floor tab cancels hidden object placement');
+  expectText(await catalogue.locator('.tool-card.active').textContent(), 'Slab', 'Floor tab cancels hidden object placement');
 
-  await catalogue.locator('.add-height').click();
-  phase('second build height');
-  await page.waitForFunction(() => {
-    const catalogue = document.querySelector('habbo-game')?.shadowRoot?.querySelector('catalogue-explorer');
-    return catalogue?.shadowRoot?.querySelectorAll('.height-choice').length === 2;
+  phase('floating slab plane');
+  await planeNumber.fill('1.15');
+  await planeNumber.blur();
+  await page.waitForTimeout(80);
+  if (await planeNumber.inputValue() !== '1.15') errors.push('Placement plane: typed Y 1.15 did not persist');
+  if (Math.abs(Number(await planeSlider.inputValue()) - 1.15) > 0.001) errors.push('Placement plane: slider did not stay synchronized with numeric input');
+  const firstFloor = await findBuildTarget(page, 'build-floor-shape', (state) => Math.abs(Number(state.hoverY) - 1.15) < 0.001);
+  const firstPoint = cellPoint(firstFloor.cell);
+  if (!firstPoint) throw new Error('Floating slab: could not parse first target cell.');
+  const secondFloor = await findBuildTarget(page, 'build-floor-shape', (state) => {
+    const point = cellPoint(state.cell);
+    return Boolean(point && Math.abs(Number(state.hoverY) - 1.15) < 0.001 && Math.abs(point.x - firstPoint.x) + Math.abs(point.z - firstPoint.z) >= 2);
   });
-  const levelButtons = catalogue.locator('.height-choice');
-  expectText(await levelButtons.last().textContent(), '+10 steps', 'new build height label');
-
-  const firstFloor = await findBuildTarget(page, 'build-floor-shape');
-  await page.mouse.click(firstFloor.x, firstFloor.y);
-  await page.waitForTimeout(100);
-  const secondFloor = await findBuildTarget(page, 'build-floor-shape', (state) => state.cell !== firstFloor.cell);
-  await page.mouse.click(secondFloor.x, secondFloor.y);
-  await page.waitForTimeout(100);
-  const secondPoint = cellPoint(secondFloor.cell);
-  if (secondPoint) {
-    const thirdFloor = await findBuildTarget(page, 'build-floor-shape', (state) => {
-      const point = cellPoint(state.cell);
-      return Boolean(point && state.cell !== firstFloor.cell && Math.abs(point.x - secondPoint.x) + Math.abs(point.z - secondPoint.z) === 1);
-    });
-    await page.mouse.click(thirdFloor.x, thirdFloor.y);
-    await page.waitForTimeout(100);
+  await page.mouse.move(firstFloor.x, firstFloor.y);
+  await page.mouse.down();
+  await page.mouse.move(secondFloor.x, secondFloor.y, { steps: 8 });
+  await page.screenshot({ path: 'artifacts/ui-floating-slab-preview.png', fullPage: true });
+  await page.mouse.up();
+  await page.waitForTimeout(140);
+  for (const target of [firstFloor, secondFloor]) {
+    const point = cellPoint(target.cell)!;
+    const projected = await host.evaluate((game: any, args) => game.debugScreenPointForCell(args.y, args.x, args.z), { y: 1.15, x: point.x, z: point.z }) as { x: number; y: number } | null;
+    if (!projected) errors.push(`Floating slab: dragged rectangle did not commit endpoint ${target.cell} at Y 1.15`);
   }
-  expectText(await catalogue.locator('.height-heading small').textContent(), 'tiles', 'build-height tile count');
-  const heightAdjust = catalogue.locator('.height-adjust');
-  await heightAdjust.locator('button').first().click();
+  const beforeCancelProjection = await host.evaluate((game: any) => game.debugScreenPointForCell(1.15, 30, 30));
+  const cancelStart = await findBuildTarget(page, 'build-floor-shape', (state) => state.cell !== firstFloor.cell && state.cell !== secondFloor.cell);
+  await page.mouse.move(cancelStart.x, cancelStart.y);
+  await page.mouse.down();
+  await page.mouse.move(cancelStart.x + 70, cancelStart.y + 20, { steps: 4 });
+  await page.mouse.click(cancelStart.x + 70, cancelStart.y + 20, { button: 'right' });
+  await page.mouse.up();
   await page.waitForTimeout(80);
-  const heightInput = heightAdjust.locator('.height-input');
-  if (await heightInput.inputValue() !== '9') errors.push('Floor base height: expected step control to move from 10 to 9');
-  await heightInput.fill('14');
-  await heightInput.blur();
-  await page.waitForTimeout(80);
-  if (await heightInput.inputValue() !== '14') errors.push('Floor base height: expected typed height 14 to persist');
-  await page.screenshot({ path: 'artifacts/ui-floor-height.png', fullPage: true });
+  if (beforeCancelProjection) errors.push('Floating slab: unexpected pre-existing far-away debug slab used by cancel test');
+  await page.screenshot({ path: 'artifacts/ui-floating-slabs.png', fullPage: true });
 
   await objectsTab.click();
   phase('object stacking');
@@ -364,7 +379,8 @@ try {
 
   await wallsTab.click();
   phase('walls');
-  expectText(await catalogue.locator('.tool-card.active').textContent(), 'Draw / remove', 'Walls default tool');
+  if (await catalogue.locator('.placement-plane').count() !== 1) errors.push('Catalogue: walls should share the virtual placement plane');
+  expectText(await catalogue.locator('.tool-card.active').textContent(), 'Wall line', 'Walls default tool');
   const wallTarget = await findBuildTarget(page, 'build-wall-shape');
   await page.mouse.click(wallTarget.x, wallTarget.y);
   await page.waitForTimeout(120);
@@ -372,6 +388,7 @@ try {
 
   await travelTab.click();
   phase('travel');
+  if (await catalogue.locator('.placement-plane').count() !== 1) errors.push('Catalogue: travel endpoints should share the virtual placement plane');
   const pairButton = catalogue.locator('.pairing .action.primary');
   expectText(await pairButton.textContent(), 'Link pair', 'teleport idle action');
   await pairButton.click();
@@ -379,11 +396,12 @@ try {
   const teleportA = await findBuildTarget(page, 'build-teleport-pair');
   await page.mouse.click(teleportA.x, teleportA.y);
   await page.waitForTimeout(100);
-  expectText(await catalogue.locator('.hint').textContent(), 'Entrance A', 'teleport endpoint A status');
+  expectText(await catalogue.locator('.hint').textContent(), 'Y 1.15', 'teleport endpoint A status');
 
-  await levelButtons.first().click();
+  await planeNumber.fill('0');
+  await planeNumber.blur();
   await page.waitForTimeout(120);
-  expectText(await catalogue.locator('.hint').textContent(), 'Entrance A', 'teleport A survives build-height switch');
+  expectText(await catalogue.locator('.hint').textContent(), 'Y 1.15', 'teleport A survives placement-plane switch');
   const teleportB = await findBuildTarget(page, 'build-teleport-pair');
   await page.mouse.click(teleportB.x, teleportB.y);
   await page.waitForTimeout(180);
@@ -414,7 +432,8 @@ try {
       'artifacts/ui-view-menu.png',
       'artifacts/ui-catalogue.png',
       'artifacts/ui-material-studio.png',
-      'artifacts/ui-floor-height.png',
+      'artifacts/ui-floating-slab-preview.png',
+      'artifacts/ui-floating-slabs.png',
       'artifacts/ui-object-stacking.png',
       'artifacts/ui-walls.png',
       'artifacts/ui-travel.png',

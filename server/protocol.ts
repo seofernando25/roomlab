@@ -12,6 +12,9 @@ export function parseRoomClientMessage(value: unknown): RoomClientMessage | null
   }
   if (value.type === 'teleport-use' && typeof value.targetEntityId === 'string') return { type: 'teleport-use', ...base, targetEntityId: value.targetEntityId };
   if (value.type === 'stand') return { type: 'stand', ...base };
+  if (value.type === 'chat' && typeof value.chatId === 'string' && value.chatId.length <= 80 && typeof value.text === 'string' && value.text.length <= 160) {
+    return { type: 'chat', ...base, chatId: value.chatId, text: value.text };
+  }
   if (value.type === 'manipulation-begin' && typeof value.entityId === 'string') return { type: 'manipulation-begin', ...base, entityId: value.entityId };
   if ((value.type === 'manipulation-pose' || value.type === 'manipulation-commit') && typeof value.manipulationId === 'string' && isTransform(value.transform)) {
     if (value.type === 'manipulation-pose') return { type: value.type, ...base, manipulationId: value.manipulationId, transform: value.transform, ...(typeof value.lift === 'number' ? { lift: clamp(value.lift, 0, 1) } : {}) };
@@ -37,25 +40,41 @@ export function parseRoomClientMessage(value: unknown): RoomClientMessage | null
 }
 
 function isCellAddress(value: unknown): value is CellAddress {
-  return isRecord(value) && typeof value.levelId === 'string' && isRecord(value.position)
+  return isRecord(value) && typeof value.y === 'number' && Number.isFinite(value.y) && isRecord(value.position)
     && Number.isInteger(value.position.x) && Number.isInteger(value.position.z);
 }
 function isTransform(value: unknown): value is TransformComponent {
-  return isRecord(value) && typeof value.levelId === 'string' && isRecord(value.position)
+  return isRecord(value) && typeof value.y === 'number' && Number.isFinite(value.y) && isRecord(value.position)
     && Number.isInteger(value.position.x) && Number.isInteger(value.position.z)
-    && isQuarter(value.rotation) && (value.elevation === undefined || (typeof value.elevation === 'number' && Number.isFinite(value.elevation)));
+    && isQuarter(value.rotation);
 }
 function isQuarter(value: unknown): value is 0 | 1 | 2 | 3 { return value === 0 || value === 1 || value === 2 || value === 3; }
 function isTopologyAction(value: unknown): value is TopologyAction {
   if (!isRecord(value) || typeof value.type !== 'string') return false;
-  if (value.type === 'topology/cells-update') return Array.isArray(value.updates);
-  if (value.type === 'topology/cells-add') return typeof value.levelId === 'string' && Array.isArray(value.cells);
-  if (value.type === 'topology/cells-remove') return typeof value.levelId === 'string' && Array.isArray(value.positions);
-  if (value.type === 'topology/wall-set') return typeof value.levelId === 'string' && isRecord(value.wall);
-  if (value.type === 'topology/wall-remove') return typeof value.levelId === 'string' && (value.axis === 'x' || value.axis === 'z') && Number.isInteger(value.x) && Number.isInteger(value.z);
-  if (value.type === 'topology/level-add') return isRecord(value.level);
-  if (value.type === 'topology/level-base-set') return typeof value.levelId === 'string' && Number.isInteger(value.baseElevation);
+  if (value.type === 'topology/cells-update') return Array.isArray(value.updates) && value.updates.every(isCellUpdate);
+  if (value.type === 'topology/cells-add') return Array.isArray(value.cells) && value.cells.every(isRoomCell);
+  if (value.type === 'topology/cells-remove') return Array.isArray(value.addresses) && value.addresses.every(isCellAddress);
+  if (value.type === 'topology/wall-set') return isWall(value.wall);
+  if (value.type === 'topology/wall-remove') return isWallEdge(value.edge);
   return false;
+}
+function isCellUpdate(value: unknown): boolean {
+  return isRecord(value) && isCellAddress(value.address)
+    && (value.y === undefined || (typeof value.y === 'number' && Number.isFinite(value.y)))
+    && (value.floorFinish === undefined || typeof value.floorFinish === 'string');
+}
+function isRoomCell(value: unknown): boolean {
+  return isRecord(value) && typeof value.y === 'number' && Number.isFinite(value.y)
+    && typeof value.floorFinish === 'string' && isRecord(value.position)
+    && Number.isInteger(value.position.x) && Number.isInteger(value.position.z);
+}
+function isWall(value: unknown): boolean {
+  return isWallEdge(value) && isRecord(value) && typeof value.finish === 'string';
+}
+function isWallEdge(value: unknown): boolean {
+  return isRecord(value) && (value.axis === 'x' || value.axis === 'z')
+    && Number.isInteger(value.x) && Number.isInteger(value.z)
+    && typeof value.y === 'number' && Number.isFinite(value.y);
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function clamp(value: number, min: number, max: number): number { return Math.min(max, Math.max(min, value)); }

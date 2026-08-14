@@ -9,6 +9,7 @@ export interface RoomGameNetwork {
   move(target: CellAddress): void;
   sit(targetEntityId: EntityId, seatIndex: number): void;
   teleport(targetEntityId: EntityId): void;
+  chat(chatId: string, text: string): void;
   beginManipulation(entityId: EntityId): void;
   updateManipulation(entityId: EntityId, transform: TransformComponent, lift: number): void;
   commitManipulation(entityId: EntityId, transform: TransformComponent): void;

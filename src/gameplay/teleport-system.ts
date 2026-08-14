@@ -13,7 +13,7 @@ export function teleportDestination(state: WorldState, sourceId: EntityId): Cell
   const target = entityById(state, targetId);
   if (!target) return null;
   const transform = target.components.transform;
-  return { levelId: transform.levelId, position: transform.position };
+  return { y: transform.y, position: transform.position };
 }
 
 /** Headless actor teleport for NPCs/server simulation. Presentation controllers can use the same destination query. */

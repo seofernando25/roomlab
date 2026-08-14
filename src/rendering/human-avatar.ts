@@ -7,6 +7,7 @@ import {
   type HumanTextureLibrary,
 } from './human-compositor';
 import { HumanPixelTransport } from './human-pixel-transport';
+import { AvatarChatBubble } from './avatar-chat-bubble';
 
 export type { HumanDirection } from './human-compositor';
 
@@ -27,6 +28,7 @@ export class HumanAvatar extends THREE.Group {
   readonly #plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.#material);
   readonly #pixelTransport = new HumanPixelTransport();
   readonly #sitPixelTransport = new HumanPixelTransport();
+  readonly #chatBubble = new AvatarChatBubble(AVATAR_HEIGHT);
   #library: HumanTextureLibrary | null = null;
   #worldDirection: HumanDirection;
   #worldDirectionValue: number;
@@ -46,11 +48,12 @@ export class HumanAvatar extends THREE.Group {
     this.#plane.visible = false;
     this.#plane.scale.set(AVATAR_HEIGHT * (64 / 96), AVATAR_HEIGHT, 1);
     this.updatePlaneHeight();
-    this.add(this.#plane, createGroundShadow());
+    this.add(this.#plane, createGroundShadow(), this.#chatBubble.group);
   }
 
   get pose(): HumanPose { return this.#pose; }
   get worldDirection(): HumanDirection { return this.#worldDirection; }
+  get hasChat(): boolean { return this.#chatBubble.active; }
 
   async load(): Promise<void> {
     this.#library = await loadHumanTextureLibrary();
@@ -79,6 +82,10 @@ export class HumanAvatar extends THREE.Group {
     this.updatePlaneHeight();
   }
 
+  say(chatId: string, text: string): void {
+    this.#chatBubble.say(chatId, text);
+  }
+
   update(cameraYaw: number, camera: THREE.Camera, deltaSeconds = 0): void {
     this.#plane.quaternion.copy(camera.quaternion);
     const yawDelta = cameraYaw - this.#lastCameraYaw;
@@ -86,6 +93,7 @@ export class HumanAvatar extends THREE.Group {
     this.#lastCameraYaw = cameraYaw;
     if (this.#pose === 'walk') this.#animationTime += deltaSeconds;
     this.applyView(cameraYaw);
+    this.#chatBubble.update(this.#elevation, deltaSeconds);
   }
 
   dispose(): void {
@@ -93,6 +101,7 @@ export class HumanAvatar extends THREE.Group {
     this.#material.dispose();
     this.#pixelTransport.dispose();
     this.#sitPixelTransport.dispose();
+    this.#chatBubble.dispose();
   }
 
   private applyView(cameraYaw: number): void {
@@ -179,6 +188,7 @@ export class HumanAvatar extends THREE.Group {
   private updatePlaneHeight(): void {
     this.#plane.position.y = AVATAR_HEIGHT / 2 + this.#elevation;
   }
+
 }
 
 export function relativeHumanDirection(worldDirection: HumanDirection, cameraYaw: number): HumanDirection {

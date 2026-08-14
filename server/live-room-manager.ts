@@ -4,7 +4,7 @@ import { GameStore } from '../src/domain/game-store';
 import { ActorMotionSystem } from '../src/gameplay/actor-motion-system';
 import { createRoomSimulation } from '../src/gameplay/simulation-pipeline';
 import type { AccountDto, JoinRoomDto, RoomClientMessage, RoomId, RoomServerMessage, UserId } from '../src/online/types';
-import { inventoryPrototypeSet } from './economy-service';
+import { inventoryPrototypeSet, listInventory } from './economy-service';
 import { LiveRoomCommands, type CommandPublisher } from './live-room-commands';
 import type { JoinTicket, LiveRoom, ManipulationLease, Member, RoomTransport } from './live-room-model';
 import { accessForActor, accessProviderFor, actorEntity, actorEventKey, spawnCell } from './live-room-model';
@@ -45,6 +45,8 @@ export class LiveRoomManager implements CommandPublisher {
       lastClientSequence: -1,
       commands: new Map(),
       lastActorKey: '',
+      lastActorSentAt: 0,
+      lastChatAt: 0,
       pendingSeat: null,
     };
     room.members.set(memberId, member);
@@ -134,6 +136,21 @@ export class LiveRoomManager implements CommandPublisher {
     this.broadcast(room, (sessionId, sequence) => ({ type: 'world', roomSessionId: sessionId, serverSequence: sequence, snapshot: room.store.state }));
   }
 
+  sendInventory(room: LiveRoom, userId: UserId): void {
+    const items = listInventory(userId);
+    for (const member of room.members.values()) {
+      if (member.userId !== userId || !member.transport) continue;
+      member.transport.send({ type: 'inventory', roomSessionId: member.roomSessionId, serverSequence: room.sequence, items });
+    }
+  }
+
+  broadcastChat(room: LiveRoom, member: Member, chatId: string, text: string): void {
+    this.broadcast(room, (sessionId, sequence) => ({
+      type: 'chat', roomSessionId: sessionId, serverSequence: sequence,
+      chatId, actorId: member.actorId, userId: member.userId, username: member.username, text,
+    }));
+  }
+
   broadcastManipulation(room: LiveRoom, member: Member, lease: ManipulationLease, transform: ManipulationLease['original'], lift: number): void {
     this.broadcast(room, (sessionId, sequence) => ({
       type: 'manipulation', roomSessionId: sessionId, serverSequence: sequence, manipulationId: lease.id, userId: member.userId,
@@ -187,13 +204,16 @@ export class LiveRoomManager implements CommandPublisher {
         member.motion.update(0.05);
         if (!member.transport) continue;
         const key = actorEventKey(room.store, member.actorId);
-        if (!key || key === member.lastActorKey) continue;
+        const continuousPoseDue = member.motion.moving && now - member.lastActorSentAt >= 100;
+        if (!key || (key === member.lastActorKey && !continuousPoseDue)) continue;
         member.lastActorKey = key;
+        member.lastActorSentAt = now;
         const entity = entityById(room.store.state, member.actorId)!;
         const actor = entity.components.actor!;
+        const visual = member.motion.visualPose;
         this.broadcast(room, (sessionId, sequence) => ({
           type: 'actor', roomSessionId: sessionId, serverSequence: sequence, actorId: entity.id, transform: entity.components.transform,
-          pose: actor.pose, direction: actor.direction,
+          pose: actor.pose, direction: actor.direction, visual: { x: visual.x, y: visual.y, z: visual.z },
           ...(actor.seatedOn ? { seatedOn: actor.seatedOn } : {}), ...(actor.seatIndex === undefined ? {} : { seatIndex: actor.seatIndex }),
         }));
       }

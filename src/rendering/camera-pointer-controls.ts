@@ -73,6 +73,11 @@ export class CameraPointerControls {
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (!this.#canInteract()) return;
     event.preventDefault();
+    if (event.button === 2) {
+      this.#placement.cancel();
+      this.#drag = null;
+      return;
+    }
     this.#pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     this.#canvas.setPointerCapture(event.pointerId);
 

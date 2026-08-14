@@ -17,7 +17,7 @@ export function forwardRoomNetworkChange(store: GameStore, change: WorldChange, 
     if (teleports.length === 2) {
       const first = teleports[0]!.components.transform;
       const second = teleports[1]!.components.transform;
-      network.createTeleporter({ levelId: first.levelId, position: first.position }, { levelId: second.levelId, position: second.position });
+      network.createTeleporter({ y: first.y, position: first.position }, { y: second.y, position: second.position });
       return;
     }
     for (const action of change.actions) if (action.type.startsWith('topology/')) network.topology(action as TopologyAction);
@@ -36,7 +36,7 @@ export function syncRoomDiagnostics(canvas: HTMLCanvasElement, state: WorldState
   canvas.dataset.remoteActors = String(remoteActors.length);
   canvas.dataset.remoteActorCells = remoteActors.map((entity) => {
     const transform = entity.components.transform;
-    return `${entity.id}@${transform.levelId}:${transform.position.x},${transform.position.z}`;
+    return `${entity.id}@${transform.y}:${transform.position.x},${transform.position.z}`;
   }).sort().join(';');
   canvas.dataset.remoteActorStates = remoteActors.map((entity) => {
     const actor = entity.components.actor;
@@ -49,14 +49,12 @@ export function syncRoomDiagnostics(canvas: HTMLCanvasElement, state: WorldState
   canvas.dataset.objectPrototypes = furni.map((entity) => entity.prototypeId).sort().join(',');
   canvas.dataset.objectCells = furni.map((entity) => {
     const transform = entity.components.transform;
-    return `${entity.prototypeId}:${entity.id}@${transform.levelId}:${transform.position.x},${transform.position.z}`;
+    return `${entity.prototypeId}:${entity.id}@${transform.y}:${transform.position.x},${transform.position.z}`;
   }).sort().join(';');
 }
 
 function topologySignature(state: WorldState): string {
-  return state.topology.levels.map((level) => {
-    const cells = level.cells.map((cell) => `${cell.position.x},${cell.position.z},${cell.elevation},${cell.floorFinish}`).sort().join('|');
-    const walls = level.walls.map((wall) => `${wall.axis},${wall.x},${wall.z},${wall.finish}`).sort().join('|');
-    return `${level.id}:${level.baseElevation}:${cells}:${walls}`;
-  }).join('||');
+  const cells = state.topology.cells.map((cell) => `${cell.position.x},${cell.position.z},${cell.y},${cell.floorFinish}`).sort().join('|');
+  const walls = state.topology.walls.map((wall) => `${wall.y},${wall.axis},${wall.x},${wall.z},${wall.finish}`).sort().join('|');
+  return `${cells}||${walls}`;
 }

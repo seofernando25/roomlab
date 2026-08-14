@@ -14,6 +14,7 @@ export class DelegatingRoomGameNetwork implements RoomGameNetwork {
   move(target: CellAddress): void { this.current()?.move(target); }
   sit(targetEntityId: EntityId, seatIndex: number): void { this.current()?.sit(targetEntityId, seatIndex); }
   teleport(targetEntityId: EntityId): void { this.current()?.teleport(targetEntityId); }
+  chat(chatId: string, text: string): void { this.current()?.chat(chatId, text); }
   beginManipulation(entityId: EntityId): void { this.current()?.beginManipulation(entityId); }
   updateManipulation(entityId: EntityId, transform: TransformComponent, lift: number): void { this.current()?.updateManipulation(entityId, transform, lift); }
   commitManipulation(entityId: EntityId, transform: TransformComponent): void { this.current()?.commitManipulation(entityId, transform); }

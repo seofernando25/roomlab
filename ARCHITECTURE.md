@@ -6,7 +6,7 @@ The game uses a **hybrid ECS-lite simulation**. It deliberately does not use a g
 
 ### Room topology is not an entity
 
-`WorldState.topology` owns the room's structural grid. Today it contains room dimensions; future floor-cell masks/heights, wall edges, openings, floor finishes, and wall finishes belong here.
+`WorldState.topology` owns sparse structural floor slabs and explicit wall lines. A floor slab is keyed by integer X/Z plus an absolute world-space **top Y** and may float independently of every other slab. Walls are anchored to that same support Y. There are no topology levels, storeys, floor bases, or level IDs.
 
 Do **not** create invisible furni entities for wallpaper, floor paint, missing floor cells, or structural walls. Architecture and finishes are specialized room data.
 
@@ -51,6 +51,10 @@ Each prototype can define:
 
 These are intentionally independent.
 
+Vertical placement is continuous world space. `TransformComponent.y` is always the **bottom/support-contact Y** of an entity. Placeables with `canStack` may resolve onto an implemented `surface.height`; those heights are real values such as `0.68` or `1.15`, not quantized elevation steps. A multi-cell object requires one common support Y across its full footprint.
+
+The editor's `placementY` is local-only and means “do not resolve below this virtual plane.” It is not a floor entity or topology layer. Rendering may display a translucent editor grid at that Y; authoritative placement still resolves against actual slabs and support surfaces.
+
 ### Placement is not collision
 
 Placement asks: **may these entities coexist in this space?**
@@ -85,6 +89,8 @@ Current systems include:
 
 The renderer projects simulation state; it does not own game rules.
 
+`seating-system.ts` also owns the pure automatic-seat assignment rule: when a seat-capable entity settles under a standing actor, the authoritative room may attach that actor to an available seat. This is capability-driven and must not become a pointer/catalogue prototype-name branch.
+
 ## 4. Interactions
 
 Pointer input follows one flow:
@@ -113,7 +119,9 @@ Do not implement a logical event as a sequence of independently observable parti
 
 Local predicted world mutations can increase the local revision, while authoritative server revision ordering is tracked separately. `replaceFromServer()` replaces world simulation state without replacing local editor state and reconciles the local actor presentation on `world/replaced`.
 
-A future networking layer should send/receive semantic domain commands/events or authoritative snapshots; it should not serialize Three.js state.
+The networking layer sends semantic domain commands/events and authoritative snapshots; it never serializes Three.js state. Local movement is predicted, server actor visual poses are streamed during motion, and remote renderers interpolate toward those poses. Exact inventory changes are pushed as `inventory` room messages; ordinary world/actor/topology broadcasts must not trigger inventory polling.
+
+Furniture manipulation acquires its lease on pointer-down. Pose updates are transform-key deduplicated and throttled; moving the pointer inside the same resolved cell must not emit repeated `manipulation-pose` commands. Clicking the seat an actor already occupies must likewise be a no-op at both client and server boundaries.
 
 The durable online/economy design—including Accounts, persistent Room Documents vs Live Room Sessions, optimistic movement, live furniture manipulation, Inventory, official Shop, Marketplace, currency ledger, friends and room listings—is specified in [`ONLINE_ARCHITECTURE.md`](./ONLINE_ARCHITECTURE.md).
 
@@ -182,11 +190,13 @@ Furniture appearance is authoritative **recipe data**, never a Three.js material
 
 `material-design.ts` defines the bounded recipe language and parser. `material-program-texture.ts` is the rendering adapter that compiles that data into a nearest-filtered Three.js texture. Shared recipe textures are reference-counted and must be released with the render tree so experimentation cannot grow an unbounded GPU cache. `object-material-appearance.ts` applies recipes only to meshes tagged with the corresponding semantic slot. New furniture authors should tag geometry and declare slot metadata rather than branch in Material Studio or `RoomScene`.
 
+Material Studio is an **authoring surface for reusable `MaterialStyle` recipes**, not a furniture editor. Its preview rasterizes the same deterministic material program into a square swatch. Keep furniture selection/placement concerns out of the studio; any future workflow that assigns a saved material to an item's semantic slot should be a separate application step over the existing validated appearance component.
+
 The recipe language intentionally remains finite and deterministic. Add new reusable layer primitives to the domain parser + renderer together; do not add an "escape hatch" for arbitrary JS/GLSL. Every authoritative recipe addition needs parser bounds, deterministic rendering, protocol validation, and tests.
 
 ### Floors, wallpaper, walls, windows, paintings
 
-- structural floor plan/wall edges/openings: `RoomTopology`
+- floating structural floor slabs / manual wall lines / openings: `RoomTopology`
 - floor/wall finishes: topology surface/finish data
 - windows/doors that alter wall structure: topology fixtures/openings or dedicated structural fixture data
 - paintings/posters/wall lamps: wall-mounted entities/furni
@@ -206,6 +216,7 @@ A feature should normally be rejected/refactored if it requires any of these:
 - putting local selection/camera/pointer state in `WorldState`
 - making `RoomScene` execute prototype-specific game mechanics
 - duplicating movement/pathfinding for NPCs or pets
+- reintroducing topology levels/base heights or integer stack-elevation units
 
 The preferred feature shape is:
 

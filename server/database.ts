@@ -144,7 +144,19 @@ if (schemaVersion < 3) {
   })();
   schemaVersion = 3;
 }
-if (schemaVersion > 3) throw new Error(`Database schema ${schemaVersion} is newer than this server supports.`);
+if (schemaVersion < 4) {
+  db.transaction(() => {
+    // Pre-production destructive reset: room snapshots before v4 used topology
+    // levels and quantized stack elevation. Keep accounts/economy history, but
+    // return placed collectibles to inventory and drop incompatible rooms.
+    const now = new Date().toISOString();
+    db.query("UPDATE item_instances SET state = 'inventory', room_id = NULL, entity_id = NULL, updated_at = ? WHERE state = 'placed'").run(now);
+    db.run('DELETE FROM rooms');
+    db.query('INSERT INTO schema_migrations(version, applied_at) VALUES(4, ?)').run(now);
+  })();
+  schemaVersion = 4;
+}
+if (schemaVersion > 4) throw new Error(`Database schema ${schemaVersion} is newer than this server supports.`);
 
 export function nowIso(): string { return new Date().toISOString(); }
 

@@ -30,7 +30,7 @@ export function automaticGateUpdates(
     if (!profile) continue;
     const gateCells = occupiedCells(entity.components.transform.position, profile.footprint);
     const nearby = actors.some((actor) => {
-      if (actor.components.transform.levelId !== entity.components.transform.levelId) return false;
+      if (actor.components.transform.y !== entity.components.transform.y) return false;
       const access = accessProvider(actor.id, state);
       if (!requirementsMet(gate.requirements, access)) return false;
       return gateCells.some((cell) => chebyshev(actor.components.transform.position, cell) <= 1);

@@ -1,4 +1,4 @@
-import type { CellAddress, RoomLevelId, RotationQuarter, TopologyAction, TransformComponent, WorldState } from '../domain/types';
+import type { CellAddress, RotationQuarter, TopologyAction, TransformComponent, WorldState } from '../domain/types';
 import type { AppearanceComponent } from '../domain/material-design';
 
 export type UserId = string;
@@ -98,6 +98,7 @@ export type RoomClientMessage =
   | { readonly type: 'sit'; readonly clientCommandId: string; readonly clientSequence: number; readonly targetEntityId: string; readonly seatIndex?: number }
   | { readonly type: 'teleport-use'; readonly clientCommandId: string; readonly clientSequence: number; readonly targetEntityId: string }
   | { readonly type: 'stand'; readonly clientCommandId: string; readonly clientSequence: number }
+  | { readonly type: 'chat'; readonly clientCommandId: string; readonly clientSequence: number; readonly chatId: string; readonly text: string }
   | { readonly type: 'manipulation-begin'; readonly clientCommandId: string; readonly clientSequence: number; readonly entityId: string }
   | { readonly type: 'manipulation-pose'; readonly clientCommandId: string; readonly clientSequence: number; readonly manipulationId: string; readonly transform: TransformComponent; readonly lift?: number }
   | { readonly type: 'manipulation-commit'; readonly clientCommandId: string; readonly clientSequence: number; readonly manipulationId: string; readonly transform: TransformComponent }
@@ -115,8 +116,10 @@ export type RoomServerMessage =
   | { readonly type: 'ack'; readonly roomSessionId: string; readonly serverSequence: number; readonly clientCommandId: string }
   | { readonly type: 'rejected'; readonly roomSessionId: string; readonly serverSequence: number; readonly clientCommandId: string; readonly reason: string; readonly snapshot?: WorldState }
   | { readonly type: 'world'; readonly roomSessionId: string; readonly serverSequence: number; readonly snapshot: WorldState }
-  | { readonly type: 'actor'; readonly roomSessionId: string; readonly serverSequence: number; readonly actorId: string; readonly transform: TransformComponent; readonly pose: 'stand' | 'walk' | 'sit'; readonly direction: number; readonly seatedOn?: string; readonly seatIndex?: number }
+  | { readonly type: 'actor'; readonly roomSessionId: string; readonly serverSequence: number; readonly actorId: string; readonly transform: TransformComponent; readonly pose: 'stand' | 'walk' | 'sit'; readonly direction: number; readonly visual: { readonly x: number; readonly y: number; readonly z: number }; readonly seatedOn?: string; readonly seatIndex?: number }
   | { readonly type: 'presence'; readonly roomSessionId: string; readonly serverSequence: number; readonly users: readonly { readonly userId: UserId; readonly username: string; readonly actorId: string }[] }
+  | { readonly type: 'inventory'; readonly roomSessionId: string; readonly serverSequence: number; readonly items: readonly InventoryItemDto[] }
+  | { readonly type: 'chat'; readonly roomSessionId: string; readonly serverSequence: number; readonly chatId: string; readonly actorId: string; readonly userId: UserId; readonly username: string; readonly text: string }
   | { readonly type: 'manipulation'; readonly roomSessionId: string; readonly serverSequence: number; readonly manipulationId: string; readonly userId: UserId; readonly pose: ManipulationPoseDto }
   | { readonly type: 'manipulation-end'; readonly roomSessionId: string; readonly serverSequence: number; readonly manipulationId: string; readonly entityId: string }
   | { readonly type: 'role'; readonly roomSessionId: string; readonly serverSequence: number; readonly role: RoomRole }
@@ -132,4 +135,3 @@ export interface CreateRoomInput {
 export interface CreateListingInput { readonly itemId: ItemInstanceId; readonly price: number; }
 export interface FriendRequestInput { readonly username: string; }
 export interface RenameInput { readonly username: string; }
-export interface LevelSelection { readonly levelId: RoomLevelId; }

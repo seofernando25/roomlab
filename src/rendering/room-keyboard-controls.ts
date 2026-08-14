@@ -28,6 +28,11 @@ export class RoomKeyboardControls {
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (isEditableKeyboardEvent(event)) return;
+    if (!event.ctrlKey && !event.metaKey && !event.altKey && isZoomKey(event.code)) {
+      event.preventDefault();
+      this.camera.zoomByFactor(event.code === 'Minus' || event.code === 'NumpadSubtract' ? 1.15 : 1 / 1.15);
+      return;
+    }
     if (event.code === 'KeyQ' || event.code === 'KeyE') {
       if (event.repeat && this.camera.turnMode !== 'free') return;
       this.camera.beginTurn(event.code === 'KeyQ' ? -1 : 1);
@@ -64,6 +69,10 @@ export class RoomKeyboardControls {
       if (result.accepted) this.network?.pickup(entity.id);
     }
   }
+}
+
+function isZoomKey(code: string): boolean {
+  return code === 'Minus' || code === 'Equal' || code === 'NumpadSubtract' || code === 'NumpadAdd';
 }
 
 function isEditableKeyboardEvent(event: KeyboardEvent): boolean {

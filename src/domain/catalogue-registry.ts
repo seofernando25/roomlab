@@ -47,7 +47,10 @@ export const CATALOGUE_OBJECTS = {
     placement: floorObject(1, 1),
     collision: { mode: 'solid' },
     renderable: { renderer: 'procedural-furni', asset: 'chair', materialSlots: catalogueMaterialSlots('chair') },
-    capabilities: { sit: { status: 'implemented', seats: [{ x: 0.50, z: 0.48, height: 0.50 }] } },
+    capabilities: {
+      surface: { status: 'implemented', height: 0.68, acceptsFurni: true },
+      sit: { status: 'implemented', seats: [{ x: 0.50, z: 0.48, height: 0.50 }] },
+    },
   },
   stool: {
     id: 'stool',
@@ -188,7 +191,7 @@ export const CATALOGUE_OBJECTS = {
     renderable: { renderer: 'procedural-furni', asset: 'stairs-block', materialSlots: catalogueMaterialSlots('stairs-block') },
     capabilities: {
       surface: { status: 'implemented', height: 0.56, acceptsFurni: true },
-      traversal: { status: 'implemented', mode: 'steps', maxRiseSteps: 2 },
+      traversal: { status: 'implemented', mode: 'steps', maxRise: 0.56 },
     },
   },
   'stairs-glass': {
@@ -200,7 +203,7 @@ export const CATALOGUE_OBJECTS = {
     placement: traversalObject(),
     collision: { mode: 'none' },
     renderable: { renderer: 'procedural-furni', asset: 'stairs-glass', materialSlots: catalogueMaterialSlots('stairs-glass') },
-    capabilities: { traversal: { status: 'implemented', mode: 'steps', maxRiseSteps: 2 } },
+    capabilities: { traversal: { status: 'implemented', mode: 'steps', maxRise: 0.56 } },
   },
   'stairs-metal': {
     id: 'stairs-metal',
@@ -211,7 +214,7 @@ export const CATALOGUE_OBJECTS = {
     placement: traversalObject(),
     collision: { mode: 'none' },
     renderable: { renderer: 'procedural-furni', asset: 'stairs-metal', materialSlots: catalogueMaterialSlots('stairs-metal') },
-    capabilities: { traversal: { status: 'implemented', mode: 'steps', maxRiseSteps: 2 } },
+    capabilities: { traversal: { status: 'implemented', mode: 'steps', maxRise: 0.56 } },
   },
   'ramp-metal': {
     id: 'ramp-metal',
@@ -222,7 +225,7 @@ export const CATALOGUE_OBJECTS = {
     placement: traversalObject(),
     collision: { mode: 'none' },
     renderable: { renderer: 'procedural-furni', asset: 'ramp-metal', materialSlots: catalogueMaterialSlots('ramp-metal') },
-    capabilities: { traversal: { status: 'implemented', mode: 'ramp', maxRiseSteps: 2 } },
+    capabilities: { traversal: { status: 'implemented', mode: 'ramp', maxRise: 0.56 } },
   },
 } as const satisfies Readonly<Record<string, CatalogueObjectDefinition>>;
 

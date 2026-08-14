@@ -9,11 +9,9 @@ import {
 } from '../domain/catalogue-registry';
 import { entityById } from '../domain/entity-queries';
 import { GameStore } from '../domain/game-store';
-import type { AppearanceComponent } from '../domain/material-design';
-import { roomLevel } from '../domain/room-topology';
-import type { EntityId, FloorFinishId, RoomEditorTool, RoomLevelId, WallFinishId, WorldState } from '../domain/types';
+import { normalizeY } from '../domain/room-topology';
+import type { EntityId, FloorFinishId, RoomEditorTool, WallFinishId, WorldState } from '../domain/types';
 import { nextRotation } from '../domain/world-state';
-import { addFloorHeight, nudgeActiveFloorBase, setActiveFloorBase } from '../gameplay/room-build-operations';
 import { removeTeleporterPair } from '../gameplay/teleporter-editor';
 import { CAMERA_TURN_MODES, isCameraTurnMode, type CameraTurnMode } from '../rendering/isometric-camera';
 import { RoomScene, type RoomInteractionMode } from '../rendering/room-scene';
@@ -23,8 +21,7 @@ import './catalogue-explorer';
 import './material-studio';
 import './selection-inspector';
 import { habboGameStyles } from './habbo-game.styles';
-import { capabilityUiLabel, roomHelpText } from './habbo-game-copy';
-import { applyMaterialStudioTarget, selectedMaterialStudioTarget, type MaterialStudioTarget } from './habbo-material-studio';
+import { capabilityUiLabel } from './habbo-game-copy';
 import { applyOnlineServerMessage, forwardPredictedInventoryPlacement } from './habbo-game-online';
 export class HabboGame extends LitElement {
   static override properties = {
@@ -50,7 +47,8 @@ export class HabboGame extends LitElement {
   #viewMenuOpen = false;
   #pendingPlacementItemId: string | null = null;
   #presenceCount = 1;
-  #materialStudio: MaterialStudioTarget | null = null;
+  #materialStudioOpen = false;
+  #lastChatAt = 0;
   constructor() {
     super();
     this.initialWorld = null; this.network = null; this.inventory = null;
@@ -65,9 +63,9 @@ export class HabboGame extends LitElement {
     this.#scene = new RoomScene(canvas, this.#store, (message) => this.showMessage(message), this.network);
     this.#scene.setCameraTurnMode(this.#cameraTurn);
     this.#scene.setInteractionMode(this.#interactionMode);
+    this.#scene.setEditorGridVisible(this.#catalogueOpen);
     this.#scene.start();
   }
-
   override disconnectedCallback(): void {
     this.#scene?.dispose();
     this.#scene = null;
@@ -76,19 +74,16 @@ export class HabboGame extends LitElement {
     window.clearTimeout(this.#messageTimer);
     super.disconnectedCallback();
   }
-
   override render() {
     const state = this.#store.state;
     const editor = this.#store.editorState;
     const selected = editor.selectedEntityId ? entityById(state, editor.selectedEntityId) : undefined;
     const selectedDefinition = selected && isCatalogueObjectId(selected.prototypeId) ? getCatalogueObject(selected.prototypeId) : null;
-    const selectedLevel = selected ? roomLevel(state.topology, selected.components.transform.levelId) : undefined;
     const selectedCapabilities = selectedDefinition
       ? capabilitySummary(selectedDefinition).filter((capability) => capability.status === 'implemented')
       : [];
     const catalogueVisible = this.#interactionMode === 'edit' && this.#catalogueOpen;
-    const floorCells = state.topology.levels.reduce((sum, level) => sum + level.cells.length, 0);
-    const activeLevel = state.topology.levels.find((level) => level.id === editor.activeLevelId);
+    const floorCells = state.topology.cells.length;
     return html`
       <div class="game ${this.#interactionMode} ${catalogueVisible ? 'editor-open' : ''}">
         <canvas tabindex="0" aria-label="Playable and editable isometric hotel room"></canvas>
@@ -121,47 +116,41 @@ export class HabboGame extends LitElement {
                     <button @pointerdown=${(event: PointerEvent) => this.beginCameraTurn(event, -1)} @pointerup=${(event: PointerEvent) => this.endCameraTurn(event, -1)} @pointercancel=${(event: PointerEvent) => this.endCameraTurn(event, -1)}>↶ Left</button>
                     <button @pointerdown=${(event: PointerEvent) => this.beginCameraTurn(event, 1)} @pointerup=${(event: PointerEvent) => this.endCameraTurn(event, 1)} @pointercancel=${(event: PointerEvent) => this.endCameraTurn(event, 1)}>Right ↷</button>
                   </div>
-                  <div class="view-hint">Q / E rotate the camera · wheel or pinch zooms</div>
+                  <div class="view-hint">Q / E rotate · − / + zoom · wheel or pinch also zooms</div>
                 </div>
               ` : nothing}
             </div>
           </div>
         </div>
-
         ${this.#message ? html`<div class="toast">${this.#message}</div>` : nothing}
-        <div class="help"><span class="tile-note">${activeLevel ? floorHeightLabel(activeLevel.baseElevation) : 'Room'}.</span> ${this.helpText()}</div>
-
+        ${this.#interactionMode === 'play' && !this.#materialStudioOpen ? html`
+          <form class="chatbox" @submit=${this.sendChat}>
+            <input name="chat" maxlength="160" autocomplete="off" aria-label="Room chat" placeholder="Say something…" />
+            <button type="submit" aria-label="Send chat message">Send</button>
+          </form>
+        ` : nothing}
         ${catalogueVisible ? html`
           <catalogue-explorer class="catalogue" .world=${state} .editor=${editor} .inventory=${this.inventory}
             @catalogue-place-object=${this.onCataloguePlaceObject}
-            @catalogue-customize-object=${this.onCatalogueCustomizeObject}
-            @catalogue-rotate-placement=${this.rotateCurrent}
+            @catalogue-open-materials=${this.openMaterialStudio}
             @catalogue-tool=${this.onCatalogueTool}
             @catalogue-floor-finish=${this.onCatalogueFloorFinish}
             @catalogue-wall-finish=${this.onCatalogueWallFinish}
-            @catalogue-level=${this.onCatalogueLevel}
-            @catalogue-add-height=${this.onCatalogueAddHeight}
-            @catalogue-nudge-height=${this.onCatalogueNudgeHeight}
-            @catalogue-set-height=${this.onCatalogueSetHeight}
+            @catalogue-placement-y=${this.onCataloguePlacementY}
             @catalogue-remove-teleport=${this.onCatalogueRemoveTeleport}
             @catalogue-teleport-focus=${this.onCatalogueTeleportFocus}
             @catalogue-close=${this.closeCatalogue}></catalogue-explorer>
         ` : nothing}
-
-        ${this.#interactionMode === 'edit' && selected && selectedDefinition && !this.#materialStudio ? html`
+        ${this.#interactionMode === 'edit' && selected && selectedDefinition && !this.#materialStudioOpen ? html`
           <selection-inspector class="selection-panel" .label=${selectedDefinition.label}
-            .meta=${`${getCatalogueObjectCategory(selectedDefinition.category).label} · ${floorHeightLabel(selectedLevel?.baseElevation)} · ${footprintLabel(selected.prototypeId)} footprint`}
+            .meta=${`${getCatalogueObjectCategory(selectedDefinition.category).label} · Y ${selected.components.transform.y.toFixed(2)} · ${footprintLabel(selected.prototypeId)} footprint`}
             .capabilities=${selectedCapabilities.map((capability) => ({ label: capabilityUiLabel(capability.key, capability.label) }))}
-            .customizable=${Boolean(selectedDefinition.renderable.materialSlots?.length)}
-            @selection-rotate=${this.rotateCurrent} @selection-customize=${this.customizeSelected} @selection-pickup=${this.removeSelected}></selection-inspector>
+            @selection-rotate=${this.rotateCurrent} @selection-pickup=${this.removeSelected}></selection-inspector>
         ` : nothing}
-        ${this.#materialStudio ? html`<material-studio class="material-studio" .prototypeId=${this.#materialStudio.prototypeId}
-          .appearance=${this.#materialStudio.appearance} .actionLabel=${this.#materialStudio.kind === 'placement' ? 'Use style & place' : 'Apply style'}
-          @material-studio-apply=${this.applyMaterialStudio} @material-studio-close=${this.closeMaterialStudio}></material-studio>` : nothing}
+        ${this.#materialStudioOpen ? html`<material-studio class="material-studio" @material-studio-close=${this.closeMaterialStudio}></material-studio>` : nothing}
       </div>
     `;
   }
-
   applyServerMessage(message: RoomServerMessage): void {
     applyOnlineServerMessage(message, {
       store: this.#store, scene: this.#scene, network: this.network,
@@ -170,18 +159,16 @@ export class HabboGame extends LitElement {
       requestInventoryRefresh: () => this.dispatchEvent(new CustomEvent('inventory-refresh', { bubbles: true, composed: true })),
     });
   }
-
   debugScreenPointForPrototype(prototypeId: string): { x: number; y: number } | null { return this.#scene?.debugScreenPointForPrototype(prototypeId) ?? null; }
-  debugScreenPointForCell(levelId: RoomLevelId, x: number, z: number): { x: number; y: number } | null { return this.#scene?.debugScreenPointForCell({ levelId, position: { x, z } }) ?? null; }
+  debugScreenPointForCell(y: number, x: number, z: number): { x: number; y: number } | null { return this.#scene?.debugScreenPointForCell({ y, position: { x, z } }) ?? null; }
   private handleLocalWorldChange(change: import('../domain/types').WorldChange): void {
+    const itemId = this.#pendingPlacementItemId;
     const result = forwardPredictedInventoryPlacement(change, this.network, this.#pendingPlacementItemId);
     if (!result.consumed) return;
+    if (itemId) this.dispatchEvent(new CustomEvent('inventory-item-pending', { detail: { id: itemId, state: 'placed' }, bubbles: true, composed: true }));
     this.#pendingPlacementItemId = null;
     this.#store.dispatchEditor({ type: 'tool/set', tool: 'select' });
   }
-
-  private helpText() { return roomHelpText(this.#interactionMode, this.#cameraTurn, this.#store.editorState, this.#store.editorState.selectedEntityId !== null); }
-
   private readonly toggleInteractionMode = (): void => {
     this.#interactionMode = this.#interactionMode === 'play' ? 'edit' : 'play';
     this.#viewMenuOpen = false;
@@ -190,12 +177,12 @@ export class HabboGame extends LitElement {
       this.#store.dispatchEditor({ type: 'tool/set', tool: 'select' });
     }
     this.#scene?.setInteractionMode(this.#interactionMode);
+    this.#scene?.setEditorGridVisible(this.#interactionMode === 'edit' && this.#catalogueOpen);
     this.requestUpdate();
   };
-  private readonly toggleCatalogue = (): void => { this.#catalogueOpen = !this.#catalogueOpen; this.requestUpdate(); };
+  private readonly toggleCatalogue = (): void => { this.#catalogueOpen = !this.#catalogueOpen; this.#scene?.setEditorGridVisible(this.#catalogueOpen); this.requestUpdate(); };
   private readonly toggleViewMenu = (): void => { this.#viewMenuOpen = !this.#viewMenuOpen; this.requestUpdate(); };
-  private readonly closeCatalogue = (): void => { this.#catalogueOpen = false; this.#scene?.setTeleportFocus(null); this.requestUpdate(); };
-
+  private readonly closeCatalogue = (): void => { this.#catalogueOpen = false; this.#scene?.setEditorGridVisible(false); this.#scene?.setTeleportFocus(null); this.requestUpdate(); };
   private readonly onCataloguePlaceObject = (event: Event): void => {
     const { prototypeId, itemInstanceId } = (event as CustomEvent<{ prototypeId: CatalogueObjectId; itemInstanceId?: string }>).detail;
     const item = itemInstanceId ? this.inventory?.find((candidate) => candidate.id === itemInstanceId) : undefined;
@@ -204,29 +191,21 @@ export class HabboGame extends LitElement {
     this.#store.dispatchEditor({ type: 'placement-appearance/set', appearance: item?.appearance ?? null });
     this.#store.dispatchEditor({ type: 'tool/set', tool: 'place-prototype' });
   };
-  private readonly onCatalogueCustomizeObject = (event: Event): void => {
-    const detail = (event as CustomEvent<{ prototypeId: CatalogueObjectId; itemInstanceId?: string; appearance: AppearanceComponent | null }>).detail;
-    this.#materialStudio = { kind: 'placement', ...detail };
+  private readonly openMaterialStudio = (): void => {
+    this.#pendingPlacementItemId = null;
+    this.#store.dispatchEditor({ type: 'placement-prototype/set', prototypeId: null });
+    this.#store.dispatchEditor({ type: 'tool/set', tool: 'select' });
+    this.#materialStudioOpen = true;
     this.#catalogueOpen = false;
+    this.#scene?.setEditorGridVisible(false);
+    this.toggleAttribute('material-studio-open', true);
     this.requestUpdate();
   };
-  private readonly customizeSelected = (): void => {
-    this.#materialStudio = selectedMaterialStudioTarget(this.#store);
-    if (this.#materialStudio) { this.#catalogueOpen = false; this.requestUpdate(); }
-  };
-  private readonly applyMaterialStudio = (event: Event): void => {
-    const target = this.#materialStudio;
-    if (!target) return;
-    const appearance = (event as CustomEvent<{ appearance: AppearanceComponent | null }>).detail.appearance;
-    const result = applyMaterialStudioTarget(target, appearance, this.#store, this.network);
-    if (result.pendingItemId !== undefined) this.#pendingPlacementItemId = result.pendingItemId;
-    this.#materialStudio = null;
-    result.message ? this.showMessage(result.message) : this.requestUpdate();
-  };
   private readonly closeMaterialStudio = (): void => {
-    const returnToCatalogue = this.#materialStudio?.kind === 'placement';
-    this.#materialStudio = null;
-    if (returnToCatalogue) this.#catalogueOpen = true;
+    this.#materialStudioOpen = false;
+    this.#catalogueOpen = true;
+    this.#scene?.setEditorGridVisible(true);
+    this.toggleAttribute('material-studio-open', false);
     this.requestUpdate();
   };
   private readonly onCatalogueTool = (event: Event): void => { this.#store.dispatchEditor({ type: 'tool/set', tool: (event as CustomEvent<{ tool: RoomEditorTool }>).detail.tool }); };
@@ -240,19 +219,14 @@ export class HabboGame extends LitElement {
     this.#store.dispatchEditor({ type: 'wall-finish/set', finish });
     this.#store.dispatchEditor({ type: 'tool/set', tool: 'wall-paint' });
   };
-  private readonly onCatalogueLevel = (event: Event): void => { this.#store.dispatchEditor({ type: 'active-level/set', levelId: (event as CustomEvent<{ levelId: RoomLevelId }>).detail.levelId }); };
-  private readonly onCatalogueAddHeight = (): void => {
-    const level = addFloorHeight(this.#store);
-    this.showMessage(level ? `${floorHeightLabel(level.baseElevation)} ready. Click a ghost tile to start building there.` : 'Could not add another floor height.');
+  private readonly onCataloguePlacementY = (event: Event): void => {
+    this.#store.dispatchEditor({ type: 'placement-y/set', y: normalizeY((event as CustomEvent<{ y: number }>).detail.y) });
   };
-  private readonly onCatalogueNudgeHeight = (event: Event): void => { this.showBuildError(nudgeActiveFloorBase(this.#store, (event as CustomEvent<{ delta: number }>).detail.delta)); };
-  private readonly onCatalogueSetHeight = (event: Event): void => { this.showBuildError(setActiveFloorBase(this.#store, (event as CustomEvent<{ value: number }>).detail.value)); };
   private readonly onCatalogueRemoveTeleport = (event: Event): void => {
     const id = (event as CustomEvent<{ id: EntityId }>).detail.id;
     if (removeTeleporterPair(this.#store, id)) { this.network?.removeTeleporter(id); this.showMessage('Teleport pair removed.'); }
   };
   private readonly onCatalogueTeleportFocus = (event: Event): void => { this.#scene?.setTeleportFocus((event as CustomEvent<{ id: EntityId | null }>).detail.id); };
-
   private readonly rotateCurrent = (): void => {
     const editor = this.#store.editorState;
     if (editor.tool === 'place-prototype') {
@@ -269,10 +243,29 @@ export class HabboGame extends LitElement {
     const entity = id ? entityById(this.#store.state, id) : undefined;
     if (!entity || !isCatalogueObjectId(entity.prototypeId)) return;
     const result = this.#store.dispatch({ type: 'entity/remove', id: entity.id });
-    if (result.accepted) this.network?.pickup(entity.id);
-    if (!result.accepted) this.showMessage('Move anything stacked on this object before picking it up.');
+    if (result.accepted) {
+      this.network?.pickup(entity.id);
+      const item = this.inventory?.find((candidate) => candidate.entityId === entity.id);
+      if (item) this.dispatchEvent(new CustomEvent('inventory-item-pending', { detail: { id: item.id, state: 'inventory' }, bubbles: true, composed: true }));
+    }
+    if (!result.accepted) this.showMessage('This object is currently supporting another item.');
   };
-
+  private readonly sendChat = (event: SubmitEvent): void => {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const input = form.elements.namedItem('chat');
+    if (!(input instanceof HTMLInputElement)) return;
+    const text = input.value.trim().replace(/\s+/g, ' ');
+    if (!text) return;
+    const now = performance.now();
+    if (now - this.#lastChatAt < 350) return void this.showMessage('Give chat a moment between messages.');
+    this.#lastChatAt = now;
+    const chatId = crypto.randomUUID();
+    const actorId = this.network?.actorId ?? 'actor:local-player';
+    this.#scene?.showChat(actorId, chatId, text);
+    this.network?.chat(chatId, text);
+    input.value = '';
+  };
   private readonly changeCameraTurn = (event: Event): void => {
     const value = (event.currentTarget as HTMLSelectElement).value;
     if (!isCameraTurnMode(value)) return;
@@ -286,15 +279,10 @@ export class HabboGame extends LitElement {
     if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
     this.#scene?.endCameraTurn(direction);
   }
-
   private showMessage(message: string): void {
     this.#message = message; this.requestUpdate(); window.clearTimeout(this.#messageTimer);
     this.#messageTimer = window.setTimeout(() => { this.#message = ''; this.requestUpdate(); }, 2200);
   }
-  private showBuildError(result: { accepted: boolean; message?: string }): void { if (!result.accepted && result.message) this.showMessage(result.message); }
 }
-
-
 customElements.define('habbo-game', HabboGame);
-function floorHeightLabel(value?: number): string { return value === undefined || value === 0 ? 'Ground' : `${value > 0 ? '+' : ''}${value} steps`; }
 function turnLabel(mode: CameraTurnMode): string { return mode === 'free' ? 'Free rotation' : mode === 'snap-45' ? '45° steps' : '90° steps'; }

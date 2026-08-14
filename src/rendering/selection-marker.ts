@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { FLOOR_STEP_HEIGHT, floorWorldY } from '../domain/room-topology';
 import type { CellAddress, WorldState } from '../domain/types';
 
 export function createSelectionMarker(width: number, depth: number): THREE.Mesh {
@@ -13,10 +12,10 @@ export function createSelectionMarker(width: number, depth: number): THREE.Mesh 
   return marker;
 }
 
-export function updateSelectionMarker(marker: THREE.Mesh, state: WorldState, address: CellAddress, width: number, depth: number, elevation: number, valid: boolean): void {
+export function updateSelectionMarker(marker: THREE.Mesh, _state: WorldState, address: CellAddress, width: number, depth: number, y: number, valid: boolean): void {
   marker.position.set(
     address.position.x + width / 2,
-    floorWorldY(state.topology, address) + elevation * FLOOR_STEP_HEIGHT + 0.014,
+    y + 0.014,
     address.position.z + depth / 2,
   );
   const material = marker.material as THREE.MeshBasicMaterial;

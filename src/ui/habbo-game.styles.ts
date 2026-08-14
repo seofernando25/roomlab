@@ -5,7 +5,7 @@ export const habboGameStyles = css`
   .game { position: relative; width: 100%; height: 100%; overflow: hidden; background: #101a24; }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; outline: none; touch-action: none; user-select: none; -webkit-user-select: none; }
   .topbar {
-    position: absolute; top: 18px; left: 20px; right: 20px; display: flex;
+    position: absolute; top: 18px; left: var(--room-topbar-left, 20px); right: 20px; display: flex;
     justify-content: space-between; align-items: flex-start; gap: 14px; pointer-events: none;
   }
   .room-card, .controls {
@@ -55,7 +55,7 @@ export const habboGameStyles = css`
   .view-rotate-row button { min-height: 31px; border-radius: 3px; font-size: 9px; font-weight: 900; }
   .view-hint { margin-top: 7px; color: #718084; font-size: 8px; text-align: center; }
   .catalogue {
-    position: absolute; left: 18px; bottom: 18px; z-index: 3; pointer-events: auto;
+    position: absolute; left: 18px; right: 18px; bottom: 18px; z-index: 3; pointer-events: auto;
     filter: drop-shadow(0 4px 5px rgba(0,0,0,.12));
   }
   .selection-panel {
@@ -72,22 +72,25 @@ export const habboGameStyles = css`
   .selection-row { display: flex; gap: 6px; margin-top: 8px; }
   .selection-row button { flex: 1; min-height: 34px; border-radius: 3px; font-size: 10px; font-weight: 900; }
   .danger { background: #793e40; }
-  .help {
-    position: absolute; left: 20px; bottom: 18px; z-index: 2; max-width: min(760px, calc(100vw - 40px));
-    color: #b4c5c8; font-size: 11px; text-shadow: 0 1px 2px #000; pointer-events: none;
-  }
-  .game.edit.editor-open .help { bottom: 444px; }
-  .tile-note { color: #f0d68c; }
+  .game.edit.editor-open .selection-panel { bottom: 318px; }
   .toast {
     position: absolute; left: 50%; top: 82px; z-index: 5; transform: translateX(-50%);
     padding: 7px 12px; border-radius: 3px; background: #743e44; border: 3px solid #3d2529;
     box-shadow: 3px 3px #101820; font-size: 11px;
   }
+  .chatbox {
+    position:absolute;left:50%;bottom:18px;z-index:4;width:min(480px,calc(100% - 36px));transform:translateX(-50%);
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:5px;border:3px solid #1a2830;border-radius:5px;
+    background:#334b52;box-shadow:4px 4px 0 rgba(0,0,0,.36),inset 0 0 0 2px #668079;
+  }
+  .chatbox input{min-width:0;height:36px;box-sizing:border-box;border:2px solid #869794;border-radius:3px;background:#f7f9f8;color:#2d4145;padding:0 10px;font:800 11px inherit;outline:none}
+  .chatbox input:focus{border-color:#f3c85a;box-shadow:0 0 0 2px rgba(243,200,90,.24)}
+  .chatbox button{min-width:62px;height:36px;border-radius:3px;font-weight:900}
   :host([capture]) .topbar,
   :host([capture]) .catalogue,
   :host([capture]) .selection-panel,
   :host([capture]) .material-studio,
-  :host([capture]) .help,
+  :host([capture]) .chatbox,
   :host([capture]) .toast { display: none; }
   @media (max-width: 900px) {
     .room-meta span { display: none; }
@@ -110,7 +113,7 @@ export const habboGameStyles = css`
     .material-studio { inset:0; width:auto; }
     .selection-row button { min-height: 44px; }
     .game.editor-open .selection-panel { display: none; }
-    .help { display: none; }
     .toast { top: calc(66px + env(safe-area-inset-top)); max-width: calc(100vw - 90px); }
+    .chatbox{left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));width:auto;transform:none}.chatbox input{height:44px;font-size:16px}.chatbox button{height:44px;min-width:70px}
   }
 `;

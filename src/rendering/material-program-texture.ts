@@ -8,22 +8,7 @@ export function materialProgramTexture(style: MaterialStyle, cache = true): THRE
   const key = JSON.stringify(style);
   const existing = cache ? liveTextureCache.get(key) : undefined;
   if (existing) { existing.references += 1; return existing.texture; }
-  const { program } = style;
-  const size = program.resolution;
-  const data = new Uint8Array(size * size * 4);
-  const base = colorRgb(program.baseColor);
-  for (let y = 0; y < size; y += 1) {
-    for (let x = 0; x < size; x += 1) {
-      let pixel = base;
-      for (const layer of program.layers) {
-        const coverage = layerCoverage(layer, x, y);
-        if (coverage <= 0) continue;
-        pixel = blend(pixel, colorRgb(layer.color), layer.opacity * coverage);
-      }
-      const offset = (y * size + x) * 4;
-      data[offset] = pixel[0]; data[offset + 1] = pixel[1]; data[offset + 2] = pixel[2]; data[offset + 3] = 255;
-    }
-  }
+  const { size, data } = rasterizeMaterialStyle(style);
   const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
@@ -40,6 +25,26 @@ export function materialProgramTexture(style: MaterialStyle, cache = true): THRE
     liveTextureCache.set(key, { texture, references: 1 });
   }
   return texture;
+}
+
+export function rasterizeMaterialStyle(style: MaterialStyle): { readonly size: number; readonly data: Uint8ClampedArray } {
+  const { program } = style;
+  const size = program.resolution;
+  const data = new Uint8ClampedArray(size * size * 4);
+  const base = colorRgb(program.baseColor);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      let pixel = base;
+      for (const layer of program.layers) {
+        const coverage = layerCoverage(layer, x, y);
+        if (coverage <= 0) continue;
+        pixel = blend(pixel, colorRgb(layer.color), layer.opacity * coverage);
+      }
+      const offset = (y * size + x) * 4;
+      data[offset] = pixel[0]; data[offset + 1] = pixel[1]; data[offset + 2] = pixel[2]; data[offset + 3] = 255;
+    }
+  }
+  return { size, data };
 }
 
 export function releaseMaterialProgramTexture(texture: THREE.Texture | null): void {

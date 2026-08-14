@@ -12,7 +12,7 @@ const WALK_SPEED = 2.7;
 export interface ActorVisualPose {
   readonly x: number;
   readonly z: number;
-  readonly elevation: number;
+  readonly y: number;
   readonly direction: number;
   readonly pose: ActorPose;
 }
@@ -41,7 +41,7 @@ export class ActorMotionSystem {
     const actor = entity?.components.actor;
     if (!entity || !actor) throw new Error(`Actor ${actorId} is missing from world state.`);
     const transform = entity.components.transform;
-    this.#cell = { levelId: transform.levelId, position: { ...transform.position } };
+    this.#cell = { y: transform.y, position: { ...transform.position } };
     this.#x = this.#cell.position.x + 0.5;
     this.#z = this.#cell.position.z + 0.5;
     this.#direction = actor.direction;
@@ -58,7 +58,7 @@ export class ActorMotionSystem {
   get seatedTarget(): SeatTarget | null { return this.#seatedTarget; }
   get moving(): boolean { return this.#path.length > 0 || this.#pose === 'walk'; }
   get visualPose(): ActorVisualPose {
-    return { x: this.#x, z: this.#z, elevation: this.#elevation, direction: this.#direction, pose: this.#pose };
+    return { x: this.#x, z: this.#z, y: this.#elevation, direction: this.#direction, pose: this.#pose };
   }
 
   moveTo(target: CellAddress, state: WorldState): boolean {
@@ -69,6 +69,8 @@ export class ActorMotionSystem {
   }
 
   sitAt(target: SeatTarget, state: WorldState): boolean {
+    const current = this.actorState();
+    if (current?.pose === 'sit' && current.seatedOn === target.entityId && current.seatIndex === target.seatIndex) return false;
     const path = findActorPath(state, this.#actorId, this.#cell, target.cell, true, this.#accessProvider(this.#actorId, state));
     if (!path) return false;
     if (path.length === 0) { this.finishSeat(target); return true; }
@@ -80,7 +82,7 @@ export class ActorMotionSystem {
     const source = entityById(state, sourceId);
     if (!source || !teleportDestination(state, sourceId)) return false;
     const sourceTransform = source.components.transform;
-    const sourceAddress = { levelId: sourceTransform.levelId, position: sourceTransform.position };
+    const sourceAddress = { y: sourceTransform.y, position: sourceTransform.position };
     const path = findActorPath(state, this.#actorId, this.#cell, sourceAddress, false, this.#accessProvider(this.#actorId, state));
     if (!path) return false;
     if (path.length === 0) return this.finishTeleport(sourceId);
@@ -137,7 +139,7 @@ export class ActorMotionSystem {
     this.#seatTarget = null;
     this.#teleportSourceId = null;
     const transform = entity.components.transform;
-    this.#cell = { levelId: transform.levelId, position: { ...transform.position } };
+    this.#cell = { y: transform.y, position: { ...transform.position } };
     this.#direction = actor.direction;
     this.#pose = actor.pose;
     this.#seatedOn = actor.seatedOn ?? null;
@@ -279,9 +281,9 @@ export class ActorMotionSystem {
 }
 
 function cloneAddress(address: CellAddress): CellAddress {
-  return { levelId: address.levelId, position: { ...address.position } };
+  return { y: address.y, position: { ...address.position } };
 }
 function sameAddress(a: CellAddress, b: CellAddress): boolean {
-  return a.levelId === b.levelId && a.position.x === b.position.x && a.position.z === b.position.z;
+  return a.y === b.y && a.position.x === b.position.x && a.position.z === b.position.z;
 }
 function mod8(value: number): number { return ((value % 8) + 8) % 8; }

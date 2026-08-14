@@ -28,5 +28,5 @@ export function localPlayerEntity(state: WorldState): WorldEntity {
 
 export function entityCell(entity: WorldEntity): CellAddress {
   const transform = entity.components.transform;
-  return { levelId: transform.levelId, position: transform.position };
+  return { y: transform.y, position: transform.position };
 }

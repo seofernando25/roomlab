@@ -33,7 +33,7 @@ describe('safe programmable material recipes', () => {
   test('prototype material slots are authoritative', () => {
     expect(materialAppearanceError('chair', chairAppearance)).toBeNull();
     expect(materialAppearanceError('chair', { materials: { countertop: linen } })).toContain('not supported');
-    const invalid = createFurniEntity('chair', { x: 1, z: 1 }, 0, 'styled', 'ground', 0, { materials: { countertop: linen } });
+    const invalid = createFurniEntity('chair', { x: 1, z: 1 }, 0, 'styled', 0, { materials: { countertop: linen } });
     expect(validateWorldState(testWorld([invalid])).valid).toBeFalse();
   });
 
@@ -100,7 +100,7 @@ describe('material slots and furniture rendering', () => {
 describe('material network boundary', () => {
   const base = { clientCommandId: 'material-test', clientSequence: 1 };
   test('valid placement and appearance commands parse while executable or invalid data cannot enter the protocol', () => {
-    const transform = { levelId: 'ground', position: { x: 1, z: 1 }, rotation: 0 };
+    const transform = { y: 0, position: { x: 1, z: 1 }, rotation: 0 };
     expect(parseRoomClientMessage({ ...base, type: 'entity-place', itemInstanceId: 'item', prototypeId: 'chair', transform, appearance: chairAppearance })?.type).toBe('entity-place');
     expect(parseRoomClientMessage({ ...base, type: 'entity-appearance', entityId: 'chair', appearance: chairAppearance })?.type).toBe('entity-appearance');
     expect(parseRoomClientMessage({ ...base, type: 'entity-appearance', entityId: 'chair', appearance: null })?.type).toBe('entity-appearance');

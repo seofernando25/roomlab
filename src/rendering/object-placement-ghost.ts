@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { materialAppearanceKey, type AppearanceComponent } from '../domain/material-design';
 import { getEntityPrototype } from '../domain/prototype-registry';
-import { FLOOR_STEP_HEIGHT, floorWorldY } from '../domain/room-topology';
 import type { CellAddress, PrototypeId, RotationQuarter, WorldState } from '../domain/types';
 import { disposeRenderTree } from './dispose-render-tree';
 import { createObjectVisual } from './object-factory';
@@ -18,12 +17,12 @@ export class ObjectPlacementGhost {
   }
 
   show(
-    state: WorldState,
+    _state: WorldState,
     prototypeId: PrototypeId,
     address: CellAddress,
     rotation: RotationQuarter,
     valid: boolean,
-    elevationSteps = 0,
+    resolvedY = address.y,
     appearance?: AppearanceComponent | null,
   ): void {
     const appearanceKey = materialAppearanceKey(appearance);
@@ -32,7 +31,7 @@ export class ObjectPlacementGhost {
     const footprint = rotation % 2 === 1 ? { width: base.depth, depth: base.width } : base;
     this.group.position.set(
       address.position.x + footprint.width / 2,
-      floorWorldY(state.topology, address) + elevationSteps * FLOOR_STEP_HEIGHT + 0.014,
+      resolvedY + 0.014,
       address.position.z + footprint.depth / 2,
     );
     this.group.rotation.y = -rotation * Math.PI / 2;

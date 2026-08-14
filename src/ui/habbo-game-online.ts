@@ -20,11 +20,11 @@ export function applyOnlineServerMessage(message: RoomServerMessage, context: On
     const snapshot = network ? preserveActor(message.snapshot, store.state, network.actorId) : message.snapshot;
     const result = store.replaceFromServer(snapshot);
     if (!result.accepted) console.warn(`Rejected authoritative room snapshot r${snapshot.revision}: ${result.reason ?? 'unknown reason'}`);
-    context.requestInventoryRefresh();
     return;
   }
   if (message.type === 'rejected' && message.snapshot) {
     store.replaceFromServer(message.snapshot);
+    context.requestInventoryRefresh();
     context.showMessage(message.reason);
     return;
   }
@@ -34,6 +34,10 @@ export function applyOnlineServerMessage(message: RoomServerMessage, context: On
   }
   if (message.type === 'presence') {
     context.setPresenceCount(message.users.length);
+    return;
+  }
+  if (message.type === 'chat') {
+    scene?.showChat(message.actorId, message.chatId, message.text);
     return;
   }
   if (message.type === 'manipulation') {
@@ -67,11 +71,14 @@ function applyAuthoritativeActor(message: Extract<RoomServerMessage, { type: 'ac
     ...(message.seatedOn ? { seatedOn: message.seatedOn } : {}),
     ...(message.seatIndex === undefined ? {} : { seatIndex: message.seatIndex }),
   };
-  context.store.dispatchBatch([
+  const transformChanged = JSON.stringify(entity.components.transform) !== JSON.stringify(message.transform);
+  const actorChanged = JSON.stringify(entity.components.actor) !== JSON.stringify(actor);
+  if (transformChanged || actorChanged) context.store.dispatchBatch([
     { type: 'transform/set', id: message.actorId, transform: message.transform, validatePlacement: false },
     { type: 'component/set', id: message.actorId, component: 'actor', value: actor },
   ]);
   if (message.actorId === context.network?.actorId) context.scene?.syncPlayerFromWorld();
+  else context.scene?.applyRemoteActorVisual(message.actorId, message.visual.x, message.visual.y, message.visual.z);
 }
 
 function preserveActor(snapshot: WorldState, current: WorldState, actorId: string): WorldState {

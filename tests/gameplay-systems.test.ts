@@ -9,7 +9,7 @@ import { updateAutomaticGates } from '../src/gameplay/automatic-gate-system';
 import { InteractionDispatcher } from '../src/gameplay/interaction-dispatcher';
 import { defaultInteraction, resolveInteractions } from '../src/gameplay/interaction-system';
 import { directionForStep, findActorPath } from '../src/gameplay/navigation-system';
-import { seatPoseForVisualTransform, seatTargetFor } from '../src/gameplay/seating-system';
+import { automaticSeatAssignments, seatPoseForVisualTransform, seatTargetFor } from '../src/gameplay/seating-system';
 import { SimulationPipeline } from '../src/gameplay/simulation-pipeline';
 import { resolveTargetAction } from '../src/gameplay/targeting-system';
 import { teleportActor, teleportDestination } from '../src/gameplay/teleport-system';
@@ -51,7 +51,7 @@ describe('actor navigation and traversal', () => {
     const state = testWorld([furni('table', 'table', 1, 1)], 4, 3, { x: 0, z: 1 });
     const path = findActorPath(state, TEST_ACTOR_ID, addr(0, 1), addr(3, 1));
     expect(path).not.toBeNull();
-    expect(path?.some((cell) => cell.levelId === GROUND && cell.position.z === 1 && (cell.position.x === 1 || cell.position.x === 2))).toBeFalse();
+    expect(path?.some((cell) => cell.y === GROUND && cell.position.z === 1 && (cell.position.x === 1 || cell.position.x === 2))).toBeFalse();
   });
 
   test('runtime gate state determines collision, not prototype identity', () => {
@@ -70,11 +70,11 @@ describe('actor navigation and traversal', () => {
     expect(canTraverseCell({ actorId: TEST_ACTOR_ID, state: store.state }, addr(1, 1))).toBeTrue();
   });
 
-  test('automatic gates only react to actors on the same floor height', () => {
+  test('automatic gates only react to actors on the same support Y', () => {
     const gate = furni('gate', 'test.auto-gate', 1, 1);
     const store = new GameStore(testWorld([gate], 6, 4, { x: 0, z: 1 }));
     expect(updateAutomaticGates(store, OWNER_PROVIDER)).toBe(1);
-    store.dispatch({ type: 'transform/move', id: TEST_ACTOR_ID, address: addr(5, 3), validatePlacement: false });
+    store.dispatch({ type: 'transform/move', id: TEST_ACTOR_ID, address: addr(1, 1, 2), validatePlacement: false });
     expect(updateAutomaticGates(store, OWNER_PROVIDER)).toBe(1);
     expect(store.state.entities.find((entity) => entity.id === gate.id)?.components.toggle?.state).toBe(0);
   });
@@ -87,7 +87,7 @@ describe('actor navigation and traversal', () => {
     expect(findActorPath(state, TEST_ACTOR_ID, addr(0, 0), addr(2, 0), false, rights)).not.toBeNull();
   });
 
-  test('NPCs use the same level-aware actor motion system', () => {
+  test('NPCs use the same continuous-Y actor motion system', () => {
     const npc: WorldEntity = { ...actor('npc:1', { x: 0, z: 2 }), prototypeId: 'npc.generic' };
     const store = new GameStore(testWorld([npc], 5, 4));
     const motion = new ActorMotionSystem(store, npc.id, OWNER_PROVIDER);
@@ -99,21 +99,21 @@ describe('actor navigation and traversal', () => {
 });
 
 describe('seating system', () => {
-  test('seat metadata rotates facing and retains the object floor height', () => {
+  test('seat metadata rotates facing and retains the object support Y', () => {
     const chair = furni('chair', 'chair', 1, 1, 0);
-    const eastChair = furni('chair-east', 'chair', 1, 1, 1, 'upper');
+    const eastChair = furni('chair-east', 'chair', 1, 1, 1, 1.15);
     expect(seatTargetFor(chair)?.direction).toBe(0);
     expect(seatTargetFor(eastChair)?.direction).toBe(2);
-    expect(seatTargetFor(eastChair)?.cell.levelId).toBe('upper');
+    expect(seatTargetFor(eastChair)?.cell.y).toBe(1.15);
   });
 
-  test('seat attachment follows live object transform, pickup lift and floor-layer identity', () => {
-    const seat = seatTargetFor(furni('chair', 'chair', 1, 1, 0, 'upper'))!;
+  test('seat attachment follows live object transform, pickup lift and support Y', () => {
+    const seat = seatTargetFor(furni('chair', 'chair', 1, 1, 0, 1.15))!;
     const moved = seatPoseForVisualTransform(seat, 3.5, 2.8, 4.5, -Math.PI / 2, 0.28);
     expect(moved.x).toBeCloseTo(3.52, 2);
     expect(moved.height).toBeCloseTo(3.58, 2);
     expect(moved.direction).toBeCloseTo(2, 6);
-    expect(moved.cell.levelId).toBe('upper');
+    expect(moved.cell.y).toBe(1.15);
   });
 
   test('restored seated actors follow a moved seat without relying on a private cached seat target', () => {
@@ -136,6 +136,28 @@ describe('seating system', () => {
     const sofa = furni('sofa', 'sofa', 1, 1);
     expect(seatTargetFor(sofa, { x: 1.2, z: 1.5 })?.cell).toEqual(addr(1, 1));
     expect(seatTargetFor(sofa, { x: 2.8, z: 1.5 })?.cell).toEqual(addr(2, 1));
+  });
+
+  test('settling a seat under a standing actor yields an automatic seat assignment', () => {
+    const chair = furni('chair', 'chair', 1, 1);
+    const state = testWorld([chair], 4, 3, { x: 1, z: 1 });
+    const assignments = automaticSeatAssignments(state, chair.id);
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0]?.actorId).toBe(TEST_ACTOR_ID);
+    expect(assignments[0]?.target.entityId).toBe(chair.id);
+    expect(assignments[0]?.target.cell).toEqual(addr(1, 1));
+  });
+
+  test('automatic seating ignores actors who are currently walking', () => {
+    const chair = furni('chair', 'chair', 1, 1);
+    const state = testWorld([chair], 4, 3, { x: 1, z: 1 });
+    const walking = {
+      ...state,
+      entities: state.entities.map((entity) => entity.id === TEST_ACTOR_ID
+        ? { ...entity, components: { ...entity.components, actor: { ...entity.components.actor!, pose: 'walk' as const } } }
+        : entity),
+    };
+    expect(automaticSeatAssignments(walking, chair.id)).toEqual([]);
   });
 });
 
@@ -177,20 +199,19 @@ describe('interaction resolution', () => {
       .toEqual({ type: 'blocked', cell: addr(1, 1) });
   });
 
-  test('teleport destination includes floor height and headless teleport can cross floor heights', () => {
+  test('teleport destination includes support Y and headless teleport can cross floating slabs', () => {
     let state = reduceWorld(testWorld([], 4, 3, { x: 0, z: 1 }), {
-      type: 'topology/level-add',
-      level: { id: 'upper', label: 'Upper', baseElevation: 10, cells: [{ position: { x: 2, z: 1 }, elevation: 0, floorFinish: 'wood' }], walls: [] },
+      type: 'topology/cells-add', cells: [{ position: { x: 2, z: 1 }, y: 1.15, floorFinish: 'wood' }],
     });
     const sourceBase = furni('teleport:a', 'test.teleporter', 1, 1);
-    const destBase = furni('teleport:b', 'test.teleporter', 2, 1, 0, 'upper');
+    const destBase = furni('teleport:b', 'test.teleporter', 2, 1, 0, 1.15);
     const source = { ...sourceBase, components: { ...sourceBase.components, teleporter: { targetEntityId: destBase.id } } };
     const destination = { ...destBase, components: { ...destBase.components, teleporter: { targetEntityId: source.id } } };
     state = { ...state, entities: [...state.entities, source, destination] };
     const store = new GameStore(state);
-    expect(teleportDestination(store.state, source.id)).toEqual(addr(2, 1, 'upper'));
+    expect(teleportDestination(store.state, source.id)).toEqual(addr(2, 1, 1.15));
     expect(teleportActor(store, TEST_ACTOR_ID, source.id)).toBeTrue();
-    expect(store.state.entities.find((entity) => entity.id === TEST_ACTOR_ID)?.components.transform.levelId).toBe('upper');
+    expect(store.state.entities.find((entity) => entity.id === TEST_ACTOR_ID)?.components.transform.y).toBe(1.15);
   });
 
   test('interaction handlers and simulation systems register independently', () => {

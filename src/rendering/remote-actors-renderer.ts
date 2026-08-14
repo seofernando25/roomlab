@@ -66,6 +66,17 @@ export class RemoteActorsRenderer {
     }
   }
 
+  setVisualTarget(actorId: EntityId, x: number, y: number, z: number): void {
+    const visual = this.#visuals.get(actorId);
+    if (!visual) return;
+    visual.targetX = x;
+    visual.targetY = y;
+    visual.targetZ = z;
+  }
+
+  say(actorId: EntityId, chatId: string, text: string): void { this.#visuals.get(actorId)?.avatar.say(chatId, text); }
+  get chatCount(): number { return [...this.#visuals.values()].filter((visual) => visual.avatar.hasChat).length; }
+
   dispose(): void {
     for (const visual of this.#visuals.values()) visual.avatar.dispose();
     this.#visuals.clear();
@@ -105,6 +116,5 @@ export class RemoteActorsRenderer {
 
 function basePosition(state: WorldState, entity: WorldEntity): { x:number; y:number; z:number } {
   const transform = entity.components.transform;
-  const address = { levelId: transform.levelId, position: transform.position };
-  return { x: transform.position.x + 0.5, y: floorWorldY(state.topology, address), z: transform.position.z + 0.5 };
+  return { x: transform.position.x + 0.5, y: transform.y, z: transform.position.z + 0.5 };
 }
