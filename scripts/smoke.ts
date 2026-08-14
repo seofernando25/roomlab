@@ -7,6 +7,17 @@ const chromiumPath = process.env.CHROMIUM_PATH ?? '/usr/bin/chromium';
 const errors: string[] = [];
 let server: ReturnType<typeof Bun.spawn> | null = null;
 let browser: Browser | null = null;
+const smokeTimeoutMs = Number(process.env.SMOKE_TIMEOUT_MS ?? 120_000);
+const smokeTimeout = setTimeout(() => {
+  console.error(`[smoke] timed out after ${smokeTimeoutMs}ms`);
+  process.exitCode = 124;
+  void browser?.close();
+  server?.kill();
+}, smokeTimeoutMs);
+
+function phase(label: string): void {
+  console.log(`[smoke] ${label}`);
+}
 
 interface HoverState {
   readonly cell: string;
@@ -67,7 +78,6 @@ async function findHoverTarget(
   for (let y = 120; y <= 780; y += 42) {
     for (let x = 90; x <= 1360; x += 42) {
       await page.mouse.move(x, y);
-      await page.waitForTimeout(5);
       const state = await hoverState(page);
       if (state.action === action && state.cell && accept(state)) return { x, y, ...state };
     }
@@ -83,7 +93,6 @@ async function findBuildTarget(
   for (let y = 120; y <= 790; y += 34) {
     for (let x = 540; x <= 1370; x += 34) {
       await page.mouse.move(x, y);
-      await page.waitForTimeout(4);
       const state = await hoverState(page);
       if (state.action === action && state.valid !== 'false' && accept(state)) return { x, y, ...state };
     }
@@ -101,6 +110,7 @@ function expectText(actual: string | null, expected: string, label: string): voi
 }
 
 try {
+  phase('start');
   if (!externalUrl) {
     server = Bun.spawn(['bun', 'run', 'dev:client', '--', '--port', String(port)], {
       cwd: process.cwd(),
@@ -122,6 +132,7 @@ try {
   });
 
   const response = await page.goto(url, { waitUntil: 'networkidle' });
+  phase('room loaded');
   if (!response?.ok()) errors.push(`navigation: HTTP ${response?.status() ?? 'no response'}`);
   const host = page.locator('habbo-game');
   await host.waitFor({ state: 'visible' });
@@ -154,6 +165,7 @@ try {
   }
 
   await host.locator('.view-open').click();
+  phase('view controls');
   const viewMenu = host.locator('.view-menu');
   await viewMenu.waitFor({ state: 'visible' });
   await viewMenu.locator('.turn-select').selectOption('free');
@@ -167,6 +179,7 @@ try {
   await host.locator('.view-open').click();
 
   const sofaTarget = await findHoverTarget(page, 'sit', (state) => state.kind === 'sofa');
+  phase('play targeting');
   const playerStart = await hoverState(page);
   const start = cellPoint(playerStart.playerCell);
   if (start) {
@@ -182,6 +195,7 @@ try {
   }
 
   await modeButton.click();
+  phase('catalogue');
   expectText(await modeButton.textContent(), 'Done', 'edit/done action');
   const catalogue = host.locator('catalogue-explorer');
   await catalogue.waitFor({ state: 'visible' });
@@ -198,7 +212,7 @@ try {
     });
   }, undefined, { timeout: 8_000 });
   if (await catalogue.locator('.rail button').count() !== 4) errors.push('Catalogue: expected four primary sections');
-  if (await catalogue.locator('.object-card').count() !== 15) errors.push('Catalogue: expected 14 placeable objects');
+  if (await catalogue.locator('.object-card').count() !== 15) errors.push('Catalogue: expected 15 placeable objects');
   if (await host.locator('.controls > .mode-btn, .controls > .catalogue-open, .controls > .view-control > .view-open').count() !== 3) {
     errors.push('edit controls: expected Done, Catalogue and View as primary controls');
   }
@@ -209,44 +223,47 @@ try {
   }
 
   const search = catalogue.locator('input[type="search"]');
-  await search.fill('sofa');
-  await page.waitForTimeout(50);
-  if (await catalogue.locator('.object-card').count() !== 1) errors.push('Catalogue search: expected one sofa result');
+  await search.fill('Mint Sofa');
+  await page.waitForFunction(() => {
+    const catalogue = document.querySelector('habbo-game')?.shadowRoot?.querySelector('catalogue-explorer');
+    return catalogue?.shadowRoot?.querySelectorAll('.object-card').length === 1;
+  }, undefined, { timeout: 2_000 });
+  if (await catalogue.locator('.object-card').count() !== 1) errors.push('Catalogue search: expected one Mint Sofa result');
   await search.fill('');
   await page.screenshot({ path: 'artifacts/ui-catalogue.png', fullPage: true });
 
   await search.fill('vase');
+  phase('stacked vase interaction');
   await catalogue.locator('.object-card').first().click();
   await host.locator('.catalogue-open').click();
   await catalogue.waitFor({ state: 'detached' });
-  await page.mouse.click(sofaTarget.x, sofaTarget.y);
+  await page.waitForTimeout(120);
+  const sofaEditPoint = await host.evaluate((game: any) => game.debugScreenPointForPrototype('sofa')) as { x: number; y: number } | null;
+  if (!sofaEditPoint) throw new Error('Stacking: sofa did not produce a projected edit-mode screen point.');
+  await page.mouse.move(sofaEditPoint.x, sofaEditPoint.y);
+  const sofaPlacement = await hoverState(page);
+  if (sofaPlacement.action !== 'build-place-prototype' || sofaPlacement.valid === 'false') {
+    throw new Error(`Stacking: sofa surface was not a valid placement target (${sofaPlacement.action}/${sofaPlacement.valid}).`);
+  }
+  await page.mouse.click(sofaEditPoint.x, sofaEditPoint.y);
   await page.waitForTimeout(120);
   await page.keyboard.press('Escape');
-  let vasePoint: { x: number; y: number } | null = null;
-  for (let dy = -90; dy <= 20 && !vasePoint; dy += 10) {
-    for (let dx = -45; dx <= 45; dx += 10) {
-      const x = sofaTarget.x + dx;
-      const y = sofaTarget.y + dy;
-      await page.mouse.click(x, y);
-      await page.waitForTimeout(8);
-      const title = await host.locator('.selection-title').textContent().catch(() => null);
-      if (title?.includes('Ceramic Vase')) { vasePoint = { x, y }; break; }
-    }
-  }
-  if (!vasePoint) errors.push('Stacking: could not select the visible vase above the sofa');
-  else {
-    await page.mouse.move(vasePoint.x, vasePoint.y);
-    await page.mouse.down();
-    await page.mouse.move(vasePoint.x + 110, vasePoint.y - 20, { steps: 6 });
-    await page.mouse.up();
-    await page.waitForTimeout(120);
-    expectText(await host.locator('.selection-title').textContent(), 'Ceramic Vase', 'dragging stacked decor selects the vase');
-    await host.locator('.selection-panel .danger').click();
-    await page.waitForTimeout(80);
-    await page.mouse.click(sofaTarget.x, sofaTarget.y);
-    await page.waitForTimeout(40);
-    expectText(await host.locator('.selection-title').textContent(), 'Mint Sofa', 'sofa remains after vase pickup');
-  }
+  const vasePoint = await host.evaluate((game: any) => game.debugScreenPointForPrototype('vase')) as { x: number; y: number } | null;
+  if (!vasePoint) throw new Error('Stacking: vase did not produce a projected screen point.');
+  await page.mouse.click(vasePoint.x, vasePoint.y);
+  await page.waitForTimeout(30);
+  expectText(await host.locator('.selection-title').textContent(), 'Ceramic Vase', 'visible stacked decor selection');
+  await page.mouse.move(vasePoint.x, vasePoint.y);
+  await page.mouse.down();
+  await page.mouse.move(vasePoint.x + 110, vasePoint.y - 20, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  expectText(await host.locator('.selection-title').textContent(), 'Ceramic Vase', 'dragging stacked decor selects the vase');
+  await host.locator('.selection-panel .danger').click();
+  await page.waitForTimeout(80);
+  await page.mouse.click(sofaTarget.x, sofaTarget.y);
+  await page.waitForTimeout(40);
+  expectText(await host.locator('.selection-title').textContent(), 'Mint Sofa', 'sofa remains after vase pickup');
   await host.locator('.catalogue-open').click();
   await catalogue.waitFor({ state: 'visible' });
   await search.fill('');
@@ -257,6 +274,7 @@ try {
   const travelTab = catalogue.locator('.rail button').filter({ hasText: 'Travel' });
 
   await floorTab.click();
+  phase('floor tools');
   expectText(await catalogue.locator('.tool-card.active').textContent(), 'Shape', 'Floor default tool');
   await findBuildTarget(page, 'build-floor-shape');
 
@@ -268,6 +286,7 @@ try {
   expectText(await catalogue.locator('.tool-card.active').textContent(), 'Shape', 'Floor tab cancels hidden object placement');
 
   await catalogue.locator('.add-storey').click();
+  phase('second storey');
   await page.waitForFunction(() => {
     const catalogue = document.querySelector('habbo-game')?.shadowRoot?.querySelector('catalogue-explorer');
     return catalogue?.shadowRoot?.querySelectorAll('.level').length === 2;
@@ -297,6 +316,7 @@ try {
   await page.screenshot({ path: 'artifacts/ui-floor-storey.png', fullPage: true });
 
   await objectsTab.click();
+  phase('object stacking');
   await search.fill('Block Steps');
   await catalogue.locator('.object-card').first().click();
   const objectTarget = await findBuildTarget(page, 'build-place-prototype');
@@ -311,6 +331,7 @@ try {
   await page.keyboard.press('Escape');
 
   await wallsTab.click();
+  phase('walls');
   expectText(await catalogue.locator('.tool-card.active').textContent(), 'Draw / remove', 'Walls default tool');
   const wallTarget = await findBuildTarget(page, 'build-wall-shape');
   await page.mouse.click(wallTarget.x, wallTarget.y);
@@ -318,6 +339,7 @@ try {
   await page.screenshot({ path: 'artifacts/ui-walls.png', fullPage: true });
 
   await travelTab.click();
+  phase('travel');
   const pairButton = catalogue.locator('.pairing .action.primary');
   expectText(await pairButton.textContent(), 'Link pair', 'teleport idle action');
   await pairButton.click();
@@ -343,6 +365,7 @@ try {
   expectText(await modeButton.textContent(), 'Edit room', 'Done returns to play');
 
   await page.reload({ waitUntil: 'networkidle' });
+  phase('final reload');
   await host.waitFor({ state: 'visible' });
   await page.waitForFunction(() => {
     const canvas = document.querySelector('habbo-game')?.shadowRoot?.querySelector('canvas');
@@ -366,8 +389,10 @@ try {
     initial,
     errors,
   }, null, 2));
+  phase('complete');
   if (errors.length > 0) process.exitCode = 1;
 } finally {
+  clearTimeout(smokeTimeout);
   await browser?.close();
   if (server) {
     server.kill();

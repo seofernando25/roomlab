@@ -111,6 +111,14 @@ export class RoomScene {
   start(): void { this.#timer.reset(); this.tick(); }
   isPlayerMoving(): boolean { return this.#player.moving; }
   syncPlayerFromWorld(): void { this.#player.syncFromWorld(); this.applyHumanVisualPose(); }
+  debugScreenPointForPrototype(prototypeId: string): { x: number; y: number } | null {
+    const entity = furniEntities(this.#store.state).find((candidate) => candidate.prototypeId === prototypeId);
+    const object = entity ? this.#objects.get(entity.id) : null;
+    if (!object?.visible) return null;
+    const point = new THREE.Box3().setFromObject(object).getCenter(new THREE.Vector3()).project(this.#cameraController.camera);
+    const rect = this.#canvas.getBoundingClientRect();
+    return { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 };
+  }
 
   dispose(): void {
     cancelAnimationFrame(this.#animationFrame);

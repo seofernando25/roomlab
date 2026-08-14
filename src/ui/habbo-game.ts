@@ -177,6 +177,9 @@ export class HabboGame extends LitElement {
     });
   }
 
+  debugScreenPointForPrototype(prototypeId: string): { x: number; y: number } | null {
+    return this.#scene?.debugScreenPointForPrototype(prototypeId) ?? null;
+  }
   private handleLocalWorldChange(change: import('../domain/types').WorldChange): void {
     const result = forwardPredictedInventoryPlacement(change, this.network, this.#pendingPlacementItemId);
     if (!result.consumed) return;
