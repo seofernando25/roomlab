@@ -10,7 +10,6 @@ export interface OnlineMessageContext {
   readonly scene: RoomScene | null;
   readonly network: RoomGameNetwork | null;
   readonly showMessage: (message: string) => void;
-  readonly setPresenceCount: (count: number) => void;
   readonly requestInventoryRefresh: () => void;
 }
 
@@ -32,10 +31,7 @@ export function applyOnlineServerMessage(message: RoomServerMessage, context: On
     applyAuthoritativeActor(message, context);
     return;
   }
-  if (message.type === 'presence') {
-    context.setPresenceCount(message.users.length);
-    return;
-  }
+  if (message.type === 'presence') return;
   if (message.type === 'chat') {
     scene?.showChat(message.actorId, message.chatId, message.text);
     return;

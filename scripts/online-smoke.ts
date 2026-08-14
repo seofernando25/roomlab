@@ -9,7 +9,7 @@ const errors: string[] = [];
 let server: ReturnType<typeof Bun.spawn> | null = null;
 let browser: Browser | null = null;
 let expectedDisconnect = false;
-interface PageCounters { readonly sent:Map<string,number>; readonly received:Map<string,number>; inventoryGets:number; }
+interface PageCounters { readonly sent:Map<string,number>; readonly received:Map<string,number>; inventoryGets:number; roomGets:number; }
 const counters = new WeakMap<Page, PageCounters>();
 
 interface Hover { x:number; y:number; action:string; cell:string; kind:string; valid:string; }
@@ -27,8 +27,8 @@ async function stopServer(): Promise<void> {
 }
 async function waitFor(check:()=>Promise<boolean>|boolean, timeout:number, label:string):Promise<void>{const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await Bun.sleep(75);}throw new Error(`Timed out waiting for ${label}`);}
 function watch(page:Page,label:string):void{
-  const pageCounters:PageCounters={sent:new Map(),received:new Map(),inventoryGets:0};counters.set(page,pageCounters);
-  page.on('request',request=>{try{if(request.method()==='GET'&&new URL(request.url()).pathname==='/api/inventory')pageCounters.inventoryGets+=1;}catch{/* ignore malformed URLs */}});
+  const pageCounters:PageCounters={sent:new Map(),received:new Map(),inventoryGets:0,roomGets:0};counters.set(page,pageCounters);
+  page.on('request',request=>{try{if(request.method()!=='GET')return;const path=new URL(request.url()).pathname;if(path==='/api/inventory')pageCounters.inventoryGets+=1;if(path==='/api/rooms')pageCounters.roomGets+=1;}catch{/* ignore malformed URLs */}});
   page.on('websocket',socket=>{
     socket.on('framesent',event=>countFrame(pageCounters.sent,event.payload));
     socket.on('framereceived',event=>countFrame(pageCounters.received,event.payload));
@@ -39,6 +39,7 @@ function countFrame(map:Map<string,number>,payload:string|Buffer):void{try{const
 const sentCount=(page:Page,type:string):number=>counters.get(page)?.sent.get(type)??0;
 const receivedCount=(page:Page,type:string):number=>counters.get(page)?.received.get(type)??0;
 const inventoryGetCount=(page:Page):number=>counters.get(page)?.inventoryGets??0;
+const roomGetCount=(page:Page):number=>counters.get(page)?.roomGets??0;
 function parseCell(value:string):{x:number;z:number}|null{const[x,z]=value.split(',').map(Number);return Number.isFinite(x)&&Number.isFinite(z)?{x:x!,z:z!}:null;}
 async function signup(page:Page,username:string):Promise<void>{await page.goto(`${base}/`,{waitUntil:'domcontentloaded'});await page.locator('landing-page input[name=username]').fill(username);await page.locator('landing-page button.primary').click();await page.locator('rooms-page').waitFor({state:'visible',timeout:8_000});}
 const game=(page:Page)=>page.locator('online-room-page habbo-game');
@@ -82,17 +83,35 @@ try {
 
   phase('accounts and room join');
   await signup(alice,aliceName);
+  await waitFor(()=>receivedCount(alice,'ready')>=1,3_000,'room directory websocket ready');
+  await alice.waitForTimeout(250);const roomGetsAfterLanding=roomGetCount(alice);await alice.waitForTimeout(5_200);
+  if(roomGetCount(alice)!==roomGetsAfterLanding)errors.push('rooms: lobby still polls GET /api/rooms on a timer');
   await alice.screenshot({path:'artifacts/online-lobby.png',fullPage:true});
   const roomPath=await createRoom(alice,`Open Beta ${suffix}`);
   const roomId=roomPath.split('/').filter(Boolean).at(-1)!;
   await waitFor(async()=> (await canvasData(alice)).humanReady==='true',8_000,'Alice avatar');
 
+  const identity=alice.locator('online-room-page room-identity-card');await identity.waitFor({state:'visible'});
+  const identityName=(await identity.locator('.name').textContent())??'',identityCreator=identity.locator('.creator'),identityCreatorText=(await identityCreator.textContent())??'';
+  if(identityName!==`Open Beta ${suffix}`||identityCreatorText!==aliceName||identityName.includes('floor tiles')||identityCreatorText.startsWith('by '))errors.push('room identity: expected only room name and creator without topology/player-facing filler');
+  await identity.locator('.toggle').click();if(await identityCreator.isVisible())errors.push('room identity: collapse did not hide creator');await identity.locator('.toggle').click();
+  const dock=alice.locator('online-room-page room-action-dock');await dock.waitFor({state:'visible'});
+  const roomsDockButton=dock.locator('button[aria-label="Rooms"]');await roomsDockButton.hover();
+  if(await dock.getAttribute('data-hovered')!=='rooms')errors.push('dock: Three.js room asset did not enter hover animation state');
+  await roomsDockButton.click();const roomBrowser=alice.locator('online-room-page room-browser-panel');await roomBrowser.waitFor({state:'visible'});
+  await waitFor(async()=>((await roomBrowser.locator('.room').filter({hasText:`Open Beta ${suffix}`}).textContent())??'').includes('1 here'),4_000,'room browser initial presence');
+  await alice.screenshot({path:'artifacts/online-room-shell.png',fullPage:true});
+
   await signup(bob,bobName);
+  const bobOwned=await api<{room:{id:string;name:string}}>(bob,'/api/rooms',{method:'POST',body:{name:`Bob Room ${suffix}`}});
+  await waitFor(async()=>await roomBrowser.locator('.room').filter({hasText:`Bob Room ${suffix}`}).count()===1,4_000,'room browser live room creation');
   await bob.goto(`${base}${roomPath}`,{waitUntil:'domcontentloaded'});
   await game(bob).waitFor({state:'visible',timeout:10_000});
   await waitFor(async()=> (await canvasData(bob)).humanReady==='true',8_000,'Bob avatar');
   await Promise.all([waitRemoteCount(alice,1),waitRemoteCount(bob,1)]);
-  if(!(await game(alice).locator('.room-meta').textContent())?.includes('2 here'))errors.push('presence: Alice did not show 2 here');
+  await waitFor(async()=>((await roomBrowser.locator('.room').filter({hasText:`Open Beta ${suffix}`}).textContent())??'').includes('2 here'),4_000,'room browser live presence update');
+  if(receivedCount(alice,'rooms-changed')<1)errors.push('rooms: live room directory did not receive a rooms-changed event');
+  await roomBrowser.locator('.close').click();
   const inventoryGetsAfterJoin=inventoryGetCount(alice);
 
   phase('chat replication');
@@ -107,7 +126,7 @@ try {
 
   phase('delegated build rights');
   // Owner-managed build rights update a connected visitor immediately and authorize a real edit.
-  const settingsButton=alice.locator('online-room-page .settings');await settingsButton.click();
+  const settingsButton=identity.locator('.settings');await settingsButton.click();
   let settings=alice.locator('room-settings-panel');await settings.waitFor({state:'visible'});
   await settings.locator('input[aria-label="Editor username"]').fill(bobName);
   await settings.locator('button.secondary').filter({hasText:'Grant build rights'}).click();
@@ -181,7 +200,8 @@ try {
   await catalogue.locator('.rail button').filter({hasText:'Materials'}).click();
   const materialStudio=game(alice).locator('material-studio');await materialStudio.waitFor({state:'visible'});
   if(await materialStudio.locator('catalogue-object-preview').count())errors.push('materials: standalone studio rendered furniture-specific preview');
-  if(await alice.locator('online-room-page .back').isVisible())errors.push('materials: online room chrome remains visible above the full-screen studio');
+  if(await alice.locator('online-room-page room-action-dock').isVisible())errors.push('materials: room navigation dock remains visible above the full-screen studio');
+  if(await alice.locator('online-room-page room-identity-card').isVisible())errors.push('materials: room identity remains visible above the full-screen studio');
   const patternName=materialStudio.locator('input[aria-label="Pattern name"]');await patternName.fill('Shortcut Guard');await patternName.press('Backspace');await alice.waitForTimeout(80);
   if(!(await canvasData(alice)).objects.split(',').includes('chair'))errors.push('materials: Backspace in a pattern-name input picked up the placed chair');
   await alice.screenshot({path:'artifacts/online-material-studio.png',fullPage:true});
@@ -228,11 +248,19 @@ try {
   const inventoryAfterPickup=await api<{items:{id:string;prototypeId:string;state:string;appearance:unknown}[]}>(alice,'/api/inventory');
   if(!placedChair||!inventoryAfterPickup.items.some(item=>item.id===placedChair.id&&item.state==='inventory'))errors.push('inventory: picked-up chair did not return as the same owned item');
 
-  // Leaving a room removes the actor and presence without reloading the visitor.
-  await alice.locator('online-room-page .back').click();await alice.locator('rooms-page').waitFor({state:'visible'});
+  // Leaving a room updates the live room browser without polling or reloading the visitor.
+  await leaveEdit(alice);
+  const bobDock=bob.locator('online-room-page room-action-dock');await bobDock.locator('button[aria-label="Rooms"]').click();
+  const bobBrowser=bob.locator('online-room-page room-browser-panel');await bobBrowser.waitFor({state:'visible'});
+  await alice.locator('online-room-page room-action-dock button[aria-label="Rooms"]').click();const aliceBrowser=alice.locator('online-room-page room-browser-panel');await aliceBrowser.waitFor({state:'visible'});
+  await aliceBrowser.locator('.room').filter({hasText:`Bob Room ${suffix}`}).click();
+  await waitFor(()=>new URL(alice.url()).pathname===`/room/${bobOwned.room.id}`,5_000,'in-room browser navigation to another room');
+  await game(alice).waitFor({state:'visible',timeout:8_000});await waitFor(async()=>((await alice.locator('online-room-page room-identity-card .name').textContent())??'')===`Bob Room ${suffix}`,5_000,'new room identity after in-room navigation');
   await waitRemoteCount(bob,0);
-  await waitFor(async()=> (await game(bob).locator('.room-meta').textContent())?.includes('1 here')??false,5_000,'presence after leaving');
-  await bob.locator('online-room-page .back').click();await bob.locator('rooms-page').waitFor({state:'visible'});
+  await waitFor(async()=>((await bobBrowser.locator('.room').filter({hasText:`Open Beta ${suffix}`}).textContent())??'').includes('1 here'),5_000,'live room browser presence after leaving');
+  await alice.locator('online-room-page room-action-dock button[aria-label="Lobby"]').click();await alice.locator('rooms-page').waitFor({state:'visible'});
+  await bobBrowser.locator('.close').click();
+  await bob.locator('online-room-page room-action-dock button[aria-label="Lobby"]').click();await bob.locator('rooms-page').waitFor({state:'visible'});
 
   phase('shop and marketplace');
   // Official store purchase updates wallet and mints a new owned item instance.
@@ -271,7 +299,7 @@ try {
   const finalAlice=await canvasData(alice);
   if(finalAlice.humanReady!=='true')errors.push(`avatar: ${finalAlice.humanError||finalAlice.humanReady}`);
   if(errors.length)throw new Error(errors.join('\n'));
-  console.log(JSON.stringify({ok:true,users:[aliceName,bobName],roomPath,screenshots:['artifacts/online-lobby.png','artifacts/online-material-studio.png','artifacts/online-multiplayer-room.png','artifacts/online-shop.png','artifacts/online-friends.png']},null,2));
+  console.log(JSON.stringify({ok:true,users:[aliceName,bobName],roomPath,screenshots:['artifacts/online-lobby.png','artifacts/online-room-shell.png','artifacts/online-material-studio.png','artifacts/online-multiplayer-room.png','artifacts/online-shop.png','artifacts/online-friends.png']},null,2));
 } finally {
   await browser?.close().catch(()=>{});
   if(!process.env.ONLINE_SMOKE_URL){server?.kill();await server?.exited.catch(()=>{});rmSync(dbPath,{force:true});rmSync(`${dbPath}-wal`,{force:true});rmSync(`${dbPath}-shm`,{force:true});}

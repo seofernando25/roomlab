@@ -72,7 +72,7 @@ try {
   try {
     await landingInput.waitFor({ state: 'visible', timeout: 8_000 });
   } catch (error) {
-    if (!landingResponse?.ok() || errors.length) throw error;
+    if (!landingResponse?.ok() || errors.length) throw new Error(`Landing did not become interactive: HTTP ${landingResponse?.status() ?? 'no response'}; ${errors.join(' | ') || 'no browser errors'}`, { cause: error });
     landingResponse = await page.reload({ waitUntil: 'networkidle' });
     await landingInput.waitFor({ state: 'visible', timeout: 8_000 });
   }
@@ -107,8 +107,18 @@ try {
   await touch([[{ x: 90, y: 420, id: 1 }, { x: 300, y: 420, id: 2 }], [{ x: 120, y: 420, id: 1 }, { x: 270, y: 420, id: 2 }], [{ x: 150, y: 420, id: 1 }, { x: 240, y: 420, id: 2 }], [{ x: 175, y: 420, id: 1 }, { x: 215, y: 420, id: 2 }]]); await page.waitForTimeout(450); const zoomOut = await camera();
   await game().locator('.view-open').click(); const viewMenu = game().locator('.view-menu'); await viewMenu.waitFor({ state: 'visible' }); const morphControls = await viewMenu.locator('.morph-select').count(); await game().locator('.view-open').click();
   const healthyStatus = await page.locator('online-room-page .status').count();
+  const roomDock = page.locator('online-room-page room-action-dock'); await roomDock.waitFor({ state: 'visible' });
+  const dockBox = await roomDock.boundingBox(); const dockButtonHeight = await roomDock.locator('button').first().evaluate((button: HTMLElement) => button.getBoundingClientRect().height);
+  const roomIdentity = page.locator('online-room-page room-identity-card'); const identityBox = await roomIdentity.boundingBox();
+  const identityName = await roomIdentity.locator('.name').textContent(); const identityCreator = await roomIdentity.locator('.creator').textContent();
+  const chatBox = await game().locator('.chatbox').boundingBox();
+  await roomDock.locator('button[aria-label="Rooms"]').click(); const roomBrowser = page.locator('online-room-page room-browser-panel'); await roomBrowser.waitFor({ state: 'visible' }); const roomBrowserBox = await roomBrowser.boundingBox();
+  if (await roomIdentity.isVisible() || await game().locator('.chatbox').isVisible()) errors.push('room: browser does not clear overlapping identity/chat chrome');
+  await page.screenshot({ path: 'artifacts/mobile-room-shell.png' });
+  await roomBrowser.locator('.close').click(); await roomBrowser.waitFor({ state: 'detached' });
 
   const mode = game().locator('.mode-btn'); const modeHeight = await mode.evaluate((button: HTMLElement) => button.getBoundingClientRect().height); await mode.click();
+  if (await roomDock.isVisible()) errors.push('room: navigation dock overlaps mobile build mode instead of yielding to the Catalogue');
   const cat = game().locator('catalogue-explorer'); await cat.waitFor({ state: 'visible' }); const box = await cat.boundingBox(); const rail = await cat.locator('.rail').evaluate((element: HTMLElement) => getComputedStyle(element).flexDirection);
   const catMain = cat.locator('.main'); const catalogueScroll = await swipeInside(catMain); const cataloguePinch = await pinchInside(catMain);
   const placementPlane = cat.locator('.placement-plane');
@@ -142,6 +152,10 @@ try {
   if ((zoomOut.view ?? 0) < 18) errors.push(`room: portrait zoom-out range is too narrow (${zoomOut.view})`);
   if (morphControls !== 0) errors.push('room: avatar tuning selector should not be user-facing');
   if (healthyStatus !== 0) errors.push('room: healthy connection should not show a Live status pill');
+  if (!dockBox || dockBox.width > 370 || dockButtonHeight < 44 || await roomDock.locator('button').count() !== 5) errors.push('room: Three.js navigation dock is not a compact five-action touch target');
+  if (identityName !== 'Mobile Room' || identityCreator !== user) errors.push('room: bottom-right identity is not room name plus creator');
+  if (!identityBox || !chatBox || identityBox.y + identityBox.height > chatBox.y + 1 || chatBox.y + chatBox.height > dockBox!.y + 1) errors.push('room: mobile identity/chat/dock stack overlaps');
+  if (!roomBrowserBox || roomBrowserBox.x < 0 || roomBrowserBox.x + roomBrowserBox.width > 390 || roomBrowserBox.y < 0) errors.push('room: mobile room browser does not fit the viewport');
   if (modeHeight < 44 || materialPresetHeight < 44 || planeHeight < 44) errors.push('mobile: a primary touch action is smaller than 44px');
   if (!box || box.width < 385 || rail !== 'row') errors.push('catalogue: mobile bottom-tray layout is invalid');
   if (catalogueScroll.scrollHeight > catalogueScroll.clientHeight + 20 && catalogueScroll.scrollTop < 20) errors.push('catalogue: one-finger touch scrolling is blocked');
@@ -152,7 +166,7 @@ try {
   if (Math.abs(studioPinch.after - studioPinch.before) > 0.01) errors.push('material studio: two-finger gesture changed browser page zoom');
   if (bodyScroll !== 0) errors.push('room: canvas gestures scrolled the document');
   if (errors.length) throw new Error(errors.join('\n'));
-  console.log(JSON.stringify({ ok: true, user, landingScroll, lobbyScroll, shopCard, shopPreview, nav, canvasCss, target, scale0, scale1, pan0, pan1, zoom0, zoom1, zoomOut, morphControls, healthyStatus, modeHeight, planeHeight, box, rail, catalogueScroll, cataloguePinch, studioBox, swatchBox, materialPresetHeight, studioScroll, studioPinch, bodyScroll, errors }, null, 2));
+  console.log(JSON.stringify({ ok: true, user, landingScroll, lobbyScroll, shopCard, shopPreview, nav, canvasCss, target, scale0, scale1, pan0, pan1, zoom0, zoom1, zoomOut, morphControls, healthyStatus, dockBox, dockButtonHeight, identityBox, chatBox, roomBrowserBox, modeHeight, planeHeight, box, rail, catalogueScroll, cataloguePinch, studioBox, swatchBox, materialPresetHeight, studioScroll, studioPinch, bodyScroll, errors }, null, 2));
 } finally {
   await browser.close().catch(() => {});
   if (server) { server.kill(); await server.exited.catch(() => {}); for (const suffix of ['', '-wal', '-shm']) rmSync(dbPath + suffix, { force: true }); }

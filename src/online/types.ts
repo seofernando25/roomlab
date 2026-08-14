@@ -86,6 +86,10 @@ export interface JoinRoomDto {
   readonly websocketPath: string;
 }
 
+export type RoomDirectoryServerMessage =
+  | { readonly type: 'ready'; readonly revision: number }
+  | { readonly type: 'rooms-changed'; readonly revision: number };
+
 export interface ManipulationPoseDto {
   readonly entityId: string;
   readonly transform: TransformComponent;

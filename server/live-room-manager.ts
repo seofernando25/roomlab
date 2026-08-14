@@ -16,7 +16,9 @@ export class LiveRoomManager implements CommandPublisher {
   readonly #commands = new LiveRoomCommands(this);
   readonly #tickHandle: ReturnType<typeof setInterval>;
 
-  constructor() { this.#tickHandle = setInterval(() => this.tick(), 50); }
+  constructor(private readonly onDirectoryChanged: () => void = () => {}) {
+    this.#tickHandle = setInterval(() => this.tick(), 50);
+  }
   dispose(): void { clearInterval(this.#tickHandle); this.#rooms.clear(); this.#tickets.clear(); }
 
   prepareJoin(account: AccountDto, roomId: RoomId): JoinRoomDto {
@@ -54,6 +56,7 @@ export class LiveRoomManager implements CommandPublisher {
     const ticketId = randomUUID();
     this.#tickets.set(ticketId, { id: ticketId, roomId, userId: account.id, memberId, expiresAt: Date.now() + 30_000 });
     recordRoomJoin(account.id, roomId);
+    this.onDirectoryChanged();
     return {
       room: detail,
       roomSessionId,
@@ -75,6 +78,7 @@ export class LiveRoomManager implements CommandPublisher {
     transport.send({ type: 'hello', roomSessionId: member.roomSessionId, serverSequence: room.sequence, actorId: member.actorId, snapshot: room.store.state });
     this.broadcastWorld(room);
     this.broadcastPresence(room);
+    this.onDirectoryChanged();
     return true;
   }
 
@@ -87,6 +91,7 @@ export class LiveRoomManager implements CommandPublisher {
     room.store.dispatch({ type: 'entity/remove', id: member.actorId });
     this.broadcastWorld(room);
     this.broadcastPresence(room);
+    this.onDirectoryChanged();
     if (room.members.size === 0) this.#rooms.delete(room.roomId);
   }
 

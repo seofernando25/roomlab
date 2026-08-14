@@ -6,7 +6,11 @@ import { RoomConnection } from '../online/room-connection';
 import { RoomGameNetworkAdapter } from '../online/room-game-network';
 import type { AccountDto, InventoryItemDto, JoinRoomDto, RoomServerMessage } from '../online/types';
 import type { HabboGame } from '../ui/habbo-game';
+import type { RoomDockAction } from '../rendering/room-dock-assets';
 import '../ui/habbo-game';
+import '../ui/room-action-dock';
+import './room-browser-panel';
+import './room-identity-card';
 import './room-settings-panel';
 
 export class OnlineRoomPage extends LitElement {
@@ -15,20 +19,24 @@ export class OnlineRoomPage extends LitElement {
   declare roomId: string;
   static override styles = css`
     :host{display:block;position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;overflow:hidden;background:#102635;z-index:1;overscroll-behavior:none;touch-action:manipulation}
-    habbo-game{display:block;width:100%;height:100%;--room-topbar-left:240px}
+    habbo-game{display:block;width:100%;height:100%;--room-chat-bottom:18px}
     .loading{position:absolute;inset:0;display:grid;place-items:center;color:#dff5ff;font:700 15px system-ui;background:#102635}
-    .back,.settings{position:fixed;top:16px;z-index:80;min-height:40px;border:1px solid #8cc9e9;border-radius:9px;padding:9px 13px;color:#fff;font:800 13px system-ui;box-shadow:0 4px 16px rgba(0,0,0,.25)}
-    .back{left:16px;background:#0a527d}.settings{left:112px;background:#123d58}
     .status{position:fixed;right:16px;bottom:16px;z-index:80;padding:7px 10px;border-radius:999px;background:#08263b;color:#bde6f7;border:1px solid #317b9e;font:700 11px system-ui}
     .toast{position:fixed;left:50%;bottom:62px;z-index:90;max-width:min(360px,calc(100vw - 24px));transform:translateX(-50%);padding:9px 13px;border-radius:8px;background:#7b2e38;color:#fff;font:700 12px system-ui;text-align:center}
-    habbo-game[material-studio-open]~.back,habbo-game[material-studio-open]~.settings,habbo-game[material-studio-open]~.status{display:none}
+    room-action-dock{position:fixed;left:14px;bottom:14px;z-index:78}
+    room-identity-card{position:fixed;right:14px;bottom:14px;z-index:78}
+    room-browser-panel{position:fixed;left:14px;bottom:106px;z-index:82}
+    habbo-game[material-studio-open]~room-action-dock,habbo-game[material-studio-open]~room-identity-card,habbo-game[material-studio-open]~room-browser-panel,habbo-game[material-studio-open]~.status,habbo-game[editing]~room-action-dock,habbo-game[editing]~room-identity-card,habbo-game[editing]~room-browser-panel{display:none}
     @media(max-width:1000px){
-      habbo-game{--room-topbar-left:64px}
-      .back,.settings{left:10px;bottom:auto;width:44px;height:44px;min-height:44px;padding:0;display:grid;place-items:center;font-size:0;border-radius:10px}
-      .back{top:calc(10px + env(safe-area-inset-top))}.back::before{content:'←';font-size:22px}
-      .settings{top:calc(60px + env(safe-area-inset-top))}.settings::before{content:'⚙';font-size:19px}
-      .status{top:calc(112px + env(safe-area-inset-top));left:10px;right:auto;bottom:auto;padding:5px 8px;font-size:10px}
+      .status{top:calc(12px + env(safe-area-inset-top));left:10px;right:auto;bottom:auto;padding:5px 8px;font-size:10px}
       .toast{top:calc(66px + env(safe-area-inset-top));bottom:auto}
+    }
+    @media(max-width:1100px){habbo-game{--room-chat-bottom:106px}}
+    @media(max-width:680px){
+      habbo-game{--room-chat-bottom:calc(88px + env(safe-area-inset-bottom))}
+      room-action-dock{left:10px;bottom:calc(10px + env(safe-area-inset-bottom))}
+      room-identity-card{right:10px;bottom:calc(148px + env(safe-area-inset-bottom))}
+      room-browser-panel{left:10px;bottom:calc(88px + env(safe-area-inset-bottom))}
     }
   `;
 
@@ -40,6 +48,7 @@ export class OnlineRoomPage extends LitElement {
   #status: 'connecting'|'connected'|'reconnecting'|'closed' = 'connecting';
   #message = '';
   #settingsOpen = false;
+  #browserOpen = false;
 
   constructor(){super();this.account={id:'',username:'',createdAt:'',balance:0};this.roomId='';}
   override connectedCallback():void{
@@ -65,13 +74,13 @@ export class OnlineRoomPage extends LitElement {
       .initialWorld=${join.snapshot}
       .network=${this.#gameNetwork}
       .inventory=${this.#inventory}
-      .roomName=${join.room.name}
-      .roomSubtitle=${`by ${join.room.ownerUsername}`}
       .canEdit=${join.room.role!=='visitor'}
+      ?room-browser-open=${this.#browserOpen}
       @inventory-refresh=${this.refreshInventory}
       @inventory-item-pending=${this.onInventoryItemPending}></habbo-game>`)}
-      <button class="back" aria-label="Back to rooms" @click=${this.leave}>← Rooms</button>
-      ${join.room.role==='owner'?html`<button class="settings" aria-label="Room settings" @click=${()=>{this.#settingsOpen=true;this.requestUpdate();}}>Room settings</button>`:null}
+      <room-action-dock @room-dock-action=${this.onDockAction}></room-action-dock>
+      ${this.#browserOpen ? null : html`<room-identity-card .room=${join.room} @room-settings-open=${this.openSettings}></room-identity-card>`}
+      ${this.#browserOpen ? html`<room-browser-panel .currentRoomId=${this.roomId} @room-browser-close=${this.closeBrowser} @room-browser-join=${this.onBrowserJoin}></room-browser-panel>` : null}
       ${this.#status === 'connected' ? null : html`<div class="status ${this.#status}">${statusLabel(this.#status)}</div>`}
       ${this.#message?html`<div class="toast">${this.#message}</div>`:null}
       ${this.#settingsOpen&&join.room.role==='owner'?html`<room-settings-panel .room=${join.room} @room-settings-close=${()=>{this.#settingsOpen=false;this.requestUpdate();}} @room-settings-updated=${this.onSettingsUpdated}></room-settings-panel>`:null}`;
@@ -129,9 +138,19 @@ export class OnlineRoomPage extends LitElement {
     this.requestUpdate();
   };
   private readonly onSettingsUpdated=(event:Event):void=>{const room=(event as CustomEvent<JoinRoomDto['room']>).detail;if(this.#join)this.#join={...this.#join,room};this.requestUpdate();};
+  private readonly openSettings=():void=>{this.#settingsOpen=true;this.#browserOpen=false;this.requestUpdate();};
+  private readonly closeBrowser=():void=>{this.#browserOpen=false;this.requestUpdate();};
+  private readonly onBrowserJoin=(event:Event):void=>{const roomId=(event as CustomEvent<{roomId:string}>).detail.roomId;this.navigate(`/room/${encodeURIComponent(roomId)}`);};
+  private readonly onDockAction=(event:Event):void=>{
+    const action=(event as CustomEvent<{action:RoomDockAction}>).detail.action;
+    if(action==='rooms'){this.#browserOpen=!this.#browserOpen;this.requestUpdate();return;}
+    const path=action==='lobby'?'/rooms':action==='shop'?'/shop':action==='items'?'/items':'/me';
+    this.navigate(path);
+  };
   private readonly preventBrowserPinch=(event:TouchEvent):void=>{if(event.touches.length<2)return;if(event.composedPath().some((node)=>node instanceof HTMLCanvasElement))return;event.preventDefault();};
   private readonly preventBrowserGesture=(event:Event):void=>{if(event.composedPath().some((node)=>node instanceof HTMLCanvasElement))return;event.preventDefault();};
-  private readonly leave=():void=>{this.#connection?.close();this.dispatchEvent(new CustomEvent('leave-room',{bubbles:true,composed:true}));};
+  private navigate(path:string):void{this.#connection?.close();this.dispatchEvent(new CustomEvent('room-navigate',{detail:{path},bubbles:true,composed:true}));}
+  private readonly leave=():void=>this.navigate('/rooms');
   private showMessage(message:string):void{this.#message=message;this.requestUpdate();window.setTimeout(()=>{if(this.#message===message){this.#message='';this.requestUpdate();}},2500);}
 }
 function statusLabel(status:'connecting'|'connected'|'reconnecting'|'closed'):string{return status==='reconnecting'?'Reconnecting…':status==='connecting'?'Connecting…':'Offline';}

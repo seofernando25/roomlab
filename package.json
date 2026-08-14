@@ -28,7 +28,6 @@
   },
   "dependencies": {
     "@elysia/openapi": "^1.4.15",
-    "@elysia/static": "^1.4.11",
     "elysia": "^1.4.29",
     "lit": "^3.3.3",
     "three": "^0.185.1"

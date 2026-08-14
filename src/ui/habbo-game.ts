@@ -26,14 +26,12 @@ import { applyOnlineServerMessage, forwardPredictedInventoryPlacement } from './
 export class HabboGame extends LitElement {
   static override properties = {
     initialWorld: { attribute: false }, network: { attribute: false }, inventory: { attribute: false },
-    roomName: { type: String }, roomSubtitle: { type: String }, canEdit: { type: Boolean },
+    canEdit: { type: Boolean },
   };
   static override styles = habboGameStyles;
   declare initialWorld: WorldState | null;
   declare network: RoomGameNetwork | null;
   declare inventory: readonly InventoryItemDto[] | null;
-  declare roomName: string;
-  declare roomSubtitle: string;
   declare canEdit: boolean;
   #store = new GameStore();
   #scene: RoomScene | null = null;
@@ -46,13 +44,12 @@ export class HabboGame extends LitElement {
   #catalogueOpen = true;
   #viewMenuOpen = false;
   #pendingPlacementItemId: string | null = null;
-  #presenceCount = 1;
   #materialStudioOpen = false;
   #lastChatAt = 0;
   constructor() {
     super();
     this.initialWorld = null; this.network = null; this.inventory = null;
-    this.roomName = 'Tile House'; this.roomSubtitle = 'Room Lab'; this.canEdit = true;
+    this.canEdit = true;
   }
   override firstUpdated(): void {
     if (this.initialWorld) this.#store = new GameStore(this.initialWorld);
@@ -83,18 +80,10 @@ export class HabboGame extends LitElement {
       ? capabilitySummary(selectedDefinition).filter((capability) => capability.status === 'implemented')
       : [];
     const catalogueVisible = this.#interactionMode === 'edit' && this.#catalogueOpen;
-    const floorCells = state.topology.cells.length;
     return html`
       <div class="game ${this.#interactionMode} ${catalogueVisible ? 'editor-open' : ''}">
         <canvas tabindex="0" aria-label="Playable and editable isometric hotel room"></canvas>
         <div class="topbar">
-          <div class="room-card">
-            <div class="badge">H</div>
-            <div class="room-meta">
-              <strong>${this.roomName} • ${this.roomSubtitle}</strong>
-              <span>${this.#presenceCount} here · ${floorCells} floor tiles</span>
-            </div>
-          </div>
           <div class="controls" aria-label="Camera and room controls">
             ${this.canEdit ? html`<button class="mode-btn ${this.#interactionMode}" @click=${this.toggleInteractionMode}
               title=${this.#interactionMode === 'play' ? 'Edit this room' : 'Finish editing and return to play'}>
@@ -155,7 +144,6 @@ export class HabboGame extends LitElement {
     applyOnlineServerMessage(message, {
       store: this.#store, scene: this.#scene, network: this.network,
       showMessage: (text) => this.showMessage(text),
-      setPresenceCount: (count) => { this.#presenceCount = count; this.requestUpdate(); },
       requestInventoryRefresh: () => this.dispatchEvent(new CustomEvent('inventory-refresh', { bubbles: true, composed: true })),
     });
   }
@@ -171,6 +159,7 @@ export class HabboGame extends LitElement {
   }
   private readonly toggleInteractionMode = (): void => {
     this.#interactionMode = this.#interactionMode === 'play' ? 'edit' : 'play';
+    this.toggleAttribute('editing', this.#interactionMode === 'edit');
     this.#viewMenuOpen = false;
     if (this.#interactionMode === 'edit') {
       this.#catalogueOpen = true;

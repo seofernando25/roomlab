@@ -16,7 +16,7 @@ import {
 const roomAccessSchema = t.Union([t.Literal('open'), t.Literal('friends'), t.Literal('locked')]);
 const roomScopeSchema = t.Union([t.Literal('popular'), t.Literal('mine'), t.Literal('friends'), t.Literal('recent')]);
 
-export function createRoomRoutes(liveRooms: LiveRoomManager) {
+export function createRoomRoutes(liveRooms: LiveRoomManager, directoryChanged: () => void = () => {}) {
   return new Elysia({ name: 'room-routes' })
     .get('/api/rooms', ({ request, query, set }) => {
       const account = authenticatedAccount(request);
@@ -28,7 +28,9 @@ export function createRoomRoutes(liveRooms: LiveRoomManager) {
       const account = authenticatedAccount(request);
       if (!account) { set.status = 401; return { error: 'Sign in first.' }; }
       try {
-        return { room: createRoom(account.id, { name: body.name, ...(body.description === undefined ? {} : { description: body.description }), ...(body.access === undefined ? {} : { access: body.access as RoomAccess }), ...(body.maxUsers === undefined ? {} : { maxUsers: body.maxUsers }) }) };
+        const room = createRoom(account.id, { name: body.name, ...(body.description === undefined ? {} : { description: body.description }), ...(body.access === undefined ? {} : { access: body.access as RoomAccess }), ...(body.maxUsers === undefined ? {} : { maxUsers: body.maxUsers }) });
+        directoryChanged();
+        return { room };
       } catch (error) {
         set.status = 400;
         return { error: error instanceof Error ? error.message : 'Could not create room.' };
@@ -45,7 +47,9 @@ export function createRoomRoutes(liveRooms: LiveRoomManager) {
       const account = authenticatedAccount(request);
       if (!account) { set.status = 401; return { error: 'Sign in first.' }; }
       try {
-        return { room: updateRoom(account.id, params.id, { ...(body.name === undefined ? {} : { name: body.name }), ...(body.description === undefined ? {} : { description: body.description }), ...(body.access === undefined ? {} : { access: body.access as RoomAccess }), ...(body.maxUsers === undefined ? {} : { maxUsers: body.maxUsers }) }) };
+        const room = updateRoom(account.id, params.id, { ...(body.name === undefined ? {} : { name: body.name }), ...(body.description === undefined ? {} : { description: body.description }), ...(body.access === undefined ? {} : { access: body.access as RoomAccess }), ...(body.maxUsers === undefined ? {} : { maxUsers: body.maxUsers }) });
+        directoryChanged();
+        return { room };
       } catch (error) {
         set.status = 403;
         return { error: error instanceof Error ? error.message : 'Could not update room.' };

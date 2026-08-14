@@ -100,7 +100,7 @@ Examples:
 
 ## 5. Server authority and networking
 
-Use **HTTP/JSON for durable application operations** and **WebSocket for a joined live room**.
+Use **HTTP/JSON for durable application operations and query snapshots**, **WebSocket for a joined live room**, and a small authenticated **directory WebSocket for listing invalidation**.
 
 HTTP examples:
 
@@ -117,6 +117,9 @@ WebSocket examples:
 - room interactions
 - editing/manipulation
 - authoritative world events
+- room-directory invalidation when metadata or occupancy changes
+
+The room-directory stream is intentionally **not** a second source of room-list truth. It sends a revision/`rooms-changed` signal; the client then refreshes its current Popular/Friends/Mine/Recent/search HTTP snapshot. This avoids five-second polling while preserving per-user filtering and authorization, and a `ready` message after reconnect forces reconciliation even if events were missed while offline.
 
 A single Bun server can initially host room sessions in memory. PostgreSQL (or SQLite during an early single-server prototype) stores durable users/rooms/economy. Redis is unnecessary until multiple real-time room servers need shared presence/routing.
 
@@ -306,6 +309,8 @@ Useful sections:
 
 A listing combines persistent metadata with ephemeral occupancy count/status. Occupancy does not need to be written into the room record every time somebody joins.
 
+Clients should not poll that combined listing on a fixed timer. Keep one lightweight authenticated directory subscription while a browser is mounted; room creation/settings and live join/leave transitions invalidate the listing, and the browser refreshes its current snapshot. Multiple invalidations in one interaction may be coalesced client-side.
+
 Joining:
 
 1. choose room
@@ -315,7 +320,7 @@ Joining:
 5. instantiate renderer
 6. begin event stream
 
-Room thumbnails can be regenerated after meaningful edits or on a debounce, not on every movement tick.
+Room thumbnails can be regenerated after meaningful edits or on a debounce, not on every movement tick. The thumbnail path should be a dedicated read-only projection/cache; a Navigator row must never create a live membership, request a join ticket, or load every complete authoritative world merely to render a preview.
 
 ## 15. Editing permissions
 

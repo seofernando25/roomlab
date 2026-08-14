@@ -5,21 +5,13 @@ export const habboGameStyles = css`
   .game { position: relative; width: 100%; height: 100%; overflow: hidden; background: #101a24; }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; outline: none; touch-action: none; user-select: none; -webkit-user-select: none; }
   .topbar {
-    position: absolute; top: 18px; left: var(--room-topbar-left, 20px); right: 20px; display: flex;
-    justify-content: space-between; align-items: flex-start; gap: 14px; pointer-events: none;
+    position: absolute; top: 18px; left: 20px; right: 20px; display: flex;
+    justify-content: flex-end; align-items: flex-start; gap: 14px; pointer-events: none;
   }
-  .room-card, .controls {
+  .controls {
     pointer-events: auto; border: 3px solid #1a2830; background: #334b52;
     box-shadow: 4px 4px 0 rgba(0,0,0,.42), inset 0 0 0 2px #668079;
   }
-  .room-card { display: flex; align-items: center; gap: 10px; border-radius: 5px; padding: 7px 10px 7px 7px; }
-  .badge {
-    width: 38px; height: 38px; display: grid; place-items: center; color: #46351e;
-    background: #f3c85a; border: 3px solid #70501f; border-radius: 3px;
-    box-shadow: inset 0 0 0 2px #ffe594; font-weight: 900;
-  }
-  .room-meta strong { display: block; font-size: 14px; letter-spacing: .01em; }
-  .room-meta span { display: block; margin-top: 3px; color: #c2d0cc; font-size: 11px; }
   .controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; padding: 5px; border-radius: 5px; }
   button {
     border: 2px solid #17272d; cursor: pointer; color: #f1f2dd; background: #54706e;
@@ -79,7 +71,7 @@ export const habboGameStyles = css`
     box-shadow: 3px 3px #101820; font-size: 11px;
   }
   .chatbox {
-    position:absolute;left:50%;bottom:18px;z-index:4;width:min(480px,calc(100% - 36px));transform:translateX(-50%);
+    position:absolute;left:50%;bottom:var(--room-chat-bottom,18px);z-index:4;width:min(480px,calc(100% - 36px));transform:translateX(-50%);
     display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:5px;border:3px solid #1a2830;border-radius:5px;
     background:#334b52;box-shadow:4px 4px 0 rgba(0,0,0,.36),inset 0 0 0 2px #668079;
   }
@@ -91,16 +83,15 @@ export const habboGameStyles = css`
   :host([capture]) .selection-panel,
   :host([capture]) .material-studio,
   :host([capture]) .chatbox,
-  :host([capture]) .toast { display: none; }
+  :host([capture]) .toast,
+  :host([room-browser-open]) .chatbox { display: none; }
   @media (max-width: 900px) {
-    .room-meta span { display: none; }
     .controls { max-width: 330px; }
     .selection-panel { right: 10px; bottom: 10px; width: 240px; }
   }
   @media (max-width: 680px) {
-    .topbar { top: calc(10px + env(safe-area-inset-top)); left: 64px; right: 10px; }
-    .room-card { display: none; }
-    .controls { margin-left: auto; max-width: calc(100vw - 74px); gap: 4px; }
+    .topbar { top: calc(10px + env(safe-area-inset-top)); left: 10px; right: 10px; }
+    .controls { margin-left: auto; max-width: calc(100vw - 20px); gap: 4px; }
     .icon-btn, .mode-btn { height: 44px; min-height: 44px; }
     .mode-btn { min-width: 90px; padding: 0 8px; }
     .catalogue-open { min-width: 72px; }
@@ -114,6 +105,6 @@ export const habboGameStyles = css`
     .selection-row button { min-height: 44px; }
     .game.editor-open .selection-panel { display: none; }
     .toast { top: calc(66px + env(safe-area-inset-top)); max-width: calc(100vw - 90px); }
-    .chatbox{left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));width:auto;transform:none}.chatbox input{height:44px;font-size:16px}.chatbox button{height:44px;min-width:70px}
+    .chatbox{left:10px;right:10px;bottom:var(--room-chat-bottom,calc(10px + env(safe-area-inset-bottom)));width:auto;transform:none}.chatbox input{height:44px;font-size:16px}.chatbox button{height:44px;min-width:70px}
   }
 `;

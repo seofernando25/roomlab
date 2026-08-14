@@ -1,6 +1,7 @@
 import { LitElement, html } from 'lit';
 import type { AccountDto, RoomSummaryDto } from '../online/types';
 import { api } from '../online/api-client';
+import { RoomDirectoryConnection } from '../online/room-directory-connection';
 import { roomsPageStyles } from './rooms-page.styles';
 
 export class RoomsPage extends LitElement {
@@ -15,7 +16,9 @@ export class RoomsPage extends LitElement {
   #creating = false;
   #message = '';
   #searchTimer = 0;
-  #pollTimer = 0;
+  #directoryTimer = 0;
+  #loadGeneration = 0;
+  #directory: RoomDirectoryConnection | null = null;
 
   constructor() {
     super();
@@ -25,10 +28,18 @@ export class RoomsPage extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     void this.load();
-    this.#pollTimer = window.setInterval(() => void this.load(false), 5000);
+    this.#directory = new RoomDirectoryConnection(() => this.queueDirectoryRefresh());
+    this.#directory.connect();
   }
 
-  override disconnectedCallback(): void { window.clearInterval(this.#pollTimer); super.disconnectedCallback(); }
+  override disconnectedCallback(): void {
+    this.#loadGeneration += 1;
+    window.clearTimeout(this.#searchTimer);
+    window.clearTimeout(this.#directoryTimer);
+    this.#directory?.close();
+    this.#directory = null;
+    super.disconnectedCallback();
+  }
 
   override render() {
     return html`
@@ -72,10 +83,18 @@ export class RoomsPage extends LitElement {
   }
 
   private async load(showLoading = true): Promise<void> {
+    const generation = ++this.#loadGeneration;
+    const scope = this.#scope, search = this.#search;
     if (showLoading) { this.#loading = true; this.requestUpdate(); }
-    try { this.#rooms = await api.rooms(this.#scope, this.#search); }
-    catch (error) { this.#message = messageOf(error); }
-    finally { if (showLoading) this.#loading = false; this.requestUpdate(); }
+    try {
+      const rooms = await api.rooms(scope, search);
+      if (generation !== this.#loadGeneration) return;
+      this.#rooms = rooms; this.#message = '';
+    } catch (error) {
+      if (generation === this.#loadGeneration) this.#message = messageOf(error);
+    } finally {
+      if (generation === this.#loadGeneration) { this.#loading = false; this.requestUpdate(); }
+    }
   }
 
   private readonly toggleCreate = (): void => { this.#creating = !this.#creating; this.requestUpdate(); };
@@ -85,6 +104,10 @@ export class RoomsPage extends LitElement {
     window.clearTimeout(this.#searchTimer);
     this.#searchTimer = window.setTimeout(() => void this.load(), 180);
   };
+  private queueDirectoryRefresh(): void {
+    window.clearTimeout(this.#directoryTimer);
+    this.#directoryTimer = window.setTimeout(() => void this.load(false), 90);
+  }
   private join(roomId: string): void { this.dispatchEvent(new CustomEvent('join-room', { detail: { roomId }, bubbles: true, composed: true })); }
   private readonly createRoom = async (event: SubmitEvent): Promise<void> => {
     event.preventDefault();
