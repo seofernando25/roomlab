@@ -21,8 +21,9 @@ async function startServer(): Promise<void> {
   });
   await waitFor(async()=>{try{return (await fetch(`${base}/api/health`)).ok;}catch{return false;}},12_000,'server health');
 }
-async function restartServer(): Promise<void> {
-  server?.kill(); await server?.exited.catch(()=>{}); server=null; await Bun.sleep(250); await startServer();
+async function stopServer(): Promise<void> {
+  server?.kill(); await server?.exited.catch(()=>{}); server=null;
+  await waitFor(async()=>{try{return !(await fetch(`${base}/api/health`)).ok;}catch{return true;}},5_000,'server shutdown');
 }
 async function waitFor(check:()=>Promise<boolean>|boolean, timeout:number, label:string):Promise<void>{const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await Bun.sleep(75);}throw new Error(`Timed out waiting for ${label}`);}
 function watch(page:Page,label:string):void{
@@ -264,7 +265,7 @@ try {
   await alice.locator('lobby-shell .nav button').filter({hasText:'Rooms'}).click();await alice.locator('rooms-page').waitFor({state:'visible'});
   const oldRoomCard=alice.locator('rooms-page .room-card').filter({hasText:`Open Beta ${suffix}`}).first();await oldRoomCard.locator('button.join').click();await game(alice).waitFor({state:'visible'});
   const oldGame=game(alice);const connectionStatus=()=>alice.locator('online-room-page').getAttribute('data-connection-status');await waitFor(async()=> (await connectionStatus())==='connected',5_000,'pre-restart connected status');
-  if(!process.env.ONLINE_SMOKE_URL){expectedDisconnect=true;try{await restartServer();await waitFor(async()=> (await connectionStatus())!=='connected',8_000,'restart disconnect observed');await waitFor(async()=> (await connectionStatus())==='connected',20_000,'post-restart reconnect');await game(alice).waitFor({state:'visible'});}finally{expectedDisconnect=false;}if(oldGame===game(alice)){/* locator identity is not meaningful; keyed DOM replacement is covered by fresh hello. */}}
+  if(!process.env.ONLINE_SMOKE_URL){expectedDisconnect=true;try{await stopServer();await waitFor(async()=> (await connectionStatus())!=='connected',8_000,'restart disconnect observed');await startServer();await waitFor(async()=> (await connectionStatus())==='connected',20_000,'post-restart reconnect');await game(alice).waitFor({state:'visible'});}finally{expectedDisconnect=false;}if(oldGame===game(alice)){/* locator identity is not meaningful; keyed DOM replacement is covered by fresh hello. */}}
   const persisted=await api<{rooms:{name:string}[]}>(alice,'/api/rooms?scope=mine');if(!persisted.rooms.some(r=>r.name===`Open Beta ${suffix}`))errors.push('persistence: room missing after restart');
 
   const finalAlice=await canvasData(alice);

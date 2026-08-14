@@ -67,7 +67,15 @@ try {
     await wait(async () => { try { return (await fetch(`${base}/api/health`)).ok; } catch { return false; } }, 'mobile server');
   }
 
-  const landingResponse = await page.goto(`${base}/`, { waitUntil: 'networkidle' });
+  let landingResponse = await page.goto(`${base}/`, { waitUntil: 'networkidle' });
+  const landingInput = page.locator('landing-page input[name=username]');
+  try {
+    await landingInput.waitFor({ state: 'visible', timeout: 8_000 });
+  } catch (error) {
+    if (!landingResponse?.ok() || errors.length) throw error;
+    landingResponse = await page.reload({ waitUntil: 'networkidle' });
+    await landingInput.waitFor({ state: 'visible', timeout: 8_000 });
+  }
   const landing = await page.evaluate(() => ({ w: innerWidth, h: innerHeight, sw: document.scrollingElement?.scrollWidth ?? 0, sh: document.scrollingElement?.scrollHeight ?? 0, overflow: getComputedStyle(document.body).overflowY, touch: getComputedStyle(document.body).touchAction }));
   await touch([[{ x: 195, y: 720, id: 1 }], [{ x: 195, y: 620, id: 1 }], [{ x: 195, y: 500, id: 1 }], [{ x: 195, y: 380, id: 1 }], [{ x: 195, y: 240, id: 1 }]]);
   await page.waitForTimeout(200);
@@ -78,7 +86,7 @@ try {
 
   const user = `Mob${Date.now().toString().slice(-9)}`;
   if (!landingResponse?.ok()) errors.push(`landing: HTTP ${landingResponse?.status() ?? 'no response'}`);
-  await page.locator('landing-page input[name=username]').fill(user); await page.locator('landing-page button.primary').click(); await page.locator('rooms-page').waitFor({ state: 'visible' });
+  await landingInput.fill(user); await page.locator('landing-page button.primary').click(); await page.locator('rooms-page').waitFor({ state: 'visible' });
   await page.locator('lobby-shell .nav button').filter({ hasText: 'Shop' }).click(); await page.locator('shop-page .offer').first().waitFor({ state: 'visible' });
   const firstOffer = page.locator('shop-page .offer').first(); const shopCard = await firstOffer.boundingBox(); const shopPreview = await firstOffer.locator('.preview').boundingBox();
   const nav = await page.locator('lobby-shell .nav').evaluate((element: HTMLElement) => ({ position: getComputedStyle(element).position, bottom: element.getBoundingClientRect().bottom, height: element.getBoundingClientRect().height }));
