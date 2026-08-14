@@ -12,11 +12,12 @@
     "build": "tsc --noEmit && vite build",
     "test": "bun test",
     "smoke": "bun run scripts/smoke.ts",
+    "smoke:mobile": "bun run scripts/mobile-smoke.ts",
     "visual:qa": "bun run scripts/compare-visuals.ts",
     "visual:qa:fresh": "bun run smoke && bun run visual:qa",
     "visual:qa:gate": "VISUAL_QA_GATE=1 bun run visual:qa",
     "check": "bun run test && bun run build",
-    "verify": "bun run check && bun run smoke"
+    "verify": "bun run check && bun run smoke && bun run smoke:mobile"
   },
   "devDependencies": {
     "@types/bun": "latest",

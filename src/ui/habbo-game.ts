@@ -143,6 +143,7 @@ export class HabboGame extends LitElement {
         ${catalogueVisible ? html`
           <catalogue-explorer class="catalogue" .world=${state} .editor=${editor} .inventory=${this.inventory}
             @catalogue-place-object=${this.onCataloguePlaceObject}
+            @catalogue-rotate-placement=${this.rotateCurrent}
             @catalogue-tool=${this.onCatalogueTool}
             @catalogue-floor-finish=${this.onCatalogueFloorFinish}
             @catalogue-wall-finish=${this.onCatalogueWallFinish}

@@ -20,6 +20,7 @@ export const catalogueExplorerStyles = css`
   }
   .active-tool strong { flex:0 0 auto; font-size:9px; }
   .active-tool span { min-width:0; color:#65766b; font-size:8px; text-align:right; }
+  .placement-rotate { flex:0 0 auto; min-height:32px; border:2px solid #566f5e; border-radius:4px; background:#678970; color:#fff; font:inherit; font-size:8px; font-weight:900; cursor:pointer; }
   .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; align-content:start; }
   .object-card, .tool-card, .finish, .level, .pair, .action {
     border:2px solid #8e9d99; border-radius:5px; background:#f6f8f7; color:#34484d; font:inherit; cursor:pointer;
@@ -73,5 +74,16 @@ export const catalogueExplorerStyles = css`
   .pair span { display:block; margin-top:2px; color:#718084; font-size:8px; }
   .remove { min-height:28px; border:2px solid #624143; border-radius:4px; color:#fff; background:#8c5557; font:inherit; font-size:8px; font-weight:900; cursor:pointer; }
   .empty { padding:18px; text-align:center; color:#798689; font-size:9px; }
-  @media(max-width:620px){ :host{width:calc(100vw - 20px)} .layout{grid-template-columns:64px minmax(0,1fr)} .grid{grid-template-columns:1fr} .finishes{grid-template-columns:repeat(2,1fr)} }
+  @media(max-width:620px){
+    :host{width:100vw;max-width:none}
+    .close{width:34px;height:34px}
+    .layout{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);gap:7px;min-height:0;height:min(56dvh,480px);max-height:min(56dvh,480px)}
+    .rail{flex-direction:row;gap:4px;padding:0 0 6px;border-right:0;border-bottom:2px solid #b3bebb;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none}
+    .rail::-webkit-scrollbar{display:none}.rail button{flex:1 0 72px;min-width:72px;min-height:48px}.rail .mark{display:inline;margin:0 4px 0 0}
+    .main{min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-right:1px}
+    .toolbar{position:sticky;top:0;z-index:2;padding-bottom:5px;background:#e7ece9}.toolbar input,.toolbar select{height:44px;font-size:16px}
+    .active-tool{display:grid;grid-template-columns:1fr auto;align-items:center}.active-tool span{grid-column:1;text-align:left}.placement-rotate{grid-column:2;grid-row:1/3;min-height:44px}
+    .grid{grid-template-columns:1fr}.object-card{min-height:92px}.tools{grid-template-columns:repeat(3,1fr)}.tool-card{min-height:52px}.finishes{grid-template-columns:repeat(2,1fr)}
+    .action{min-width:44px;min-height:44px}.level{min-height:44px}.remove{min-height:44px}.hint{font-size:9px}
+  }
 `;

@@ -3,7 +3,7 @@ import { css } from 'lit';
 export const habboGameStyles = css`
   :host { display: block; width: 100%; height: 100%; color: #edf4f2; }
   .game { position: relative; width: 100%; height: 100%; overflow: hidden; background: #101a24; }
-  canvas { position: absolute; inset: 0; width: 100%; height: 100%; outline: none; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; outline: none; touch-action: none; user-select: none; -webkit-user-select: none; }
   .topbar {
     position: absolute; top: 18px; left: 20px; right: 20px; display: flex;
     justify-content: space-between; align-items: flex-start; gap: 14px; pointer-events: none;
@@ -93,12 +93,21 @@ export const habboGameStyles = css`
     .selection-panel { right: 10px; bottom: 10px; width: 240px; }
   }
   @media (max-width: 680px) {
-    .topbar { top: 10px; left: 10px; right: 10px; }
+    .topbar { top: calc(10px + env(safe-area-inset-top)); left: 64px; right: 10px; }
     .room-card { display: none; }
-    .controls { margin-left: auto; max-width: calc(100vw - 20px); }
-    .catalogue { left: 10px; bottom: 10px; }
-    .selection-panel { display: none; }
+    .controls { margin-left: auto; max-width: calc(100vw - 74px); gap: 4px; }
+    .icon-btn, .mode-btn { height: 44px; min-height: 44px; }
+    .mode-btn { min-width: 90px; padding: 0 8px; }
+    .catalogue-open { min-width: 72px; }
+    .view-open { min-width: 56px; }
+    .view-menu { top: 50px; right: 0; width: min(250px, calc(100vw - 84px)); }
+    .view-menu select { height: 44px; font-size: 16px; }
+    .view-rotate-row button { min-height: 44px; font-size: 10px; }
+    .catalogue { left: 0; right: 0; bottom: 0; width: 100%; filter: drop-shadow(0 -4px 8px rgba(0,0,0,.24)); }
+    .selection-panel { left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); width: auto; }
+    .selection-row button { min-height: 44px; }
+    .game.editor-open .selection-panel { display: none; }
     .help { display: none; }
-    .view-menu { right: -2px; }
+    .toast { top: calc(66px + env(safe-area-inset-top)); max-width: calc(100vw - 90px); }
   }
 `;

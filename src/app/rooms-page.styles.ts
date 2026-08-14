@@ -17,5 +17,5 @@ export const roomsPageStyles = [appTheme, css`
   .create { margin:0 0 18px; padding:14px; display:grid; grid-template-columns:1fr 1fr auto; gap:10px; align-items:end; }
   .create .wide { grid-column:span 2; }
   .message { margin:10px 0; padding:9px; border-radius:8px; background:#6f2934; }
-  @media(max-width:700px){ .create{grid-template-columns:1fr}.create .wide{grid-column:auto}.search{margin-left:0;max-width:none} }
+  @media(max-width:700px){ .scope{min-height:44px}.create{grid-template-columns:1fr}.create .wide{grid-column:auto}.search{margin-left:0;max-width:none} }
 `];

@@ -24,6 +24,15 @@ bun run dev
 - **Mouse wheel** — zoom.
 - **Q / E** — free orbit, Snap 45°, or Snap 90° according to the selected camera mode.
 
+### Touch / mobile
+
+- **Tap a floor cell or interactive object** — move, sit, or use it.
+- **One-finger drag on empty room space** — pan the camera.
+- **One-finger drag on an object/build tool in Edit** — move or paint/build with the active tool.
+- **Two-finger pinch/drag** — zoom and pan without committing an object/build drag.
+- Object placement exposes an on-screen **Rotate 90°** action; selected objects keep touch-sized Rotate/Pick up actions.
+- The landing/lobby use normal document scrolling; only the joined Three.js room owns the fixed viewport and disables native scrolling on its canvas.
+
 A seated avatar remains attached to the live seat transform while the furniture is dragged, lifted, or rotated in Edit mode. Pixel Transport also morphs the seated sprite continuously through a live chair rotation.
 
 ## World model
@@ -70,11 +79,11 @@ Generic `use` capabilities carry stable action IDs so custom actions can registe
 
 Logical multi-component events can use `GameStore.dispatchBatch()` for atomic one-revision updates.
 
-## Furni registry and explorer
+## Catalogue
 
-The furni catalogue is ontology-driven rather than a flat list of kind checks. Catalogue taxonomy is separate from runtime capabilities such as sit, surface, light, storage, use, toggle, gate, teleport, roller, dispenser, and WIRED-style roles. Capabilities can be marked `implemented` or `planned`.
+The Catalogue is prototype/capability-driven rather than a flat list of kind checks. Catalogue taxonomy is separate from runtime capabilities such as sit, surface, light, storage, use, toggle, gate, teleport, roller, dispenser, and WIRED-style roles. Capabilities can be marked `implemented` or `planned`.
 
-Edit mode includes a searchable/category-filterable **Furni Explorer** driven entirely by registry metadata. `hotel-panel.ts` is a reusable compact UI shell inspired by the useful structural ideas in `references/style.css`—colored title strips, light bodies, edge borders, and compact chrome—without copying its font, branding, or sprite-sheet assets.
+Edit mode includes a searchable/category-filterable **Catalogue** driven entirely by registry metadata. `hotel-panel.ts` is a reusable compact UI shell inspired by the useful structural ideas in `references/style.css`—colored title strips, light bodies, edge borders, and compact chrome—without copying its font, branding, or sprite-sheet assets.
 
 ## Rendering
 
@@ -101,11 +110,12 @@ All current `src/**/*.ts` files are kept below 300 lines.
 ```bash
 bun run test      # world/component/gameplay/rendering regression tests
 bun run build     # strict TypeScript + production Vite build
-bun run smoke     # system Chromium gameplay/UI smoke and screenshots
+bun run smoke        # desktop Chromium gameplay/UI smoke and screenshots
+bun run smoke:mobile # 390x844 touch scrolling, gestures, room UI and Catalogue smoke
 bun run visual:qa # optional OpenRouter visual comparison against references/
 ```
 
-The smoke test exercises camera modes, morph modes, floor hover, click-to-walk, authored walking, click-to-sit, Play/Edit switching, the Furni Explorer, seated furniture pickup/dragging, Pixel Transport during seated chair rotation, panning, zoom, adding furni, rotation, and WebGL sizing. Browser console/page errors fail the smoke pass.
+The desktop smoke exercises camera modes, morph modes, floor hover, click-to-walk, authored walking, click-to-sit, Play/Edit switching, the Catalogue, seated furniture pickup/dragging, Pixel Transport during seated chair rotation, panning, zoom, adding furni, rotation, and WebGL sizing. Browser console/page errors fail the smoke pass. The mobile smoke additionally verifies real touch scrolling on the landing page, fixed bottom lobby navigation, tap-to-walk, one-finger camera panning, two-finger pinch zoom, full-viewport canvas behavior, and touch-sized Catalogue controls.
 
 Interaction screenshots are written under `artifacts/`, including `room.png`, `room-editor.png`, `furni-explorer.png`, `avatar-walk.png`, `avatar-sit.png`, `avatar-sit-furni-hover.png`, and `avatar-sit-furni-rotate-transport.png`.
 

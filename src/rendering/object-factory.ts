@@ -290,7 +290,6 @@ function addDropShadow(group: THREE.Group, width: number, depth: number): void {
   );
   cast.rotation.x = -Math.PI / 2;
   cast.position.set(0, -0.006, 0);
-
   const contact = new THREE.Mesh(
     new THREE.PlaneGeometry(width * 0.54, depth * 0.42),
     contactShadowMaterial,

@@ -61,6 +61,10 @@ export class IsometricCameraController {
     return this.#turnMode;
   }
 
+  get viewHeight(): number {
+    return this.#viewHeight;
+  }
+
   setTurnMode(mode: CameraTurnMode): void {
     this.#turnMode = mode;
     this.#turnInput = 0;
@@ -112,7 +116,11 @@ export class IsometricCameraController {
   }
 
   zoom(deltaY: number): void {
-    const factor = Math.exp(deltaY * 0.0012);
+    this.zoomByFactor(Math.exp(deltaY * 0.0012));
+  }
+
+  zoomByFactor(factor: number): void {
+    if (!Number.isFinite(factor) || factor <= 0) return;
     this.#targetViewHeight = THREE.MathUtils.clamp(this.#targetViewHeight * factor, 4.2, 13.5);
   }
 

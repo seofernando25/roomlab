@@ -8,7 +8,7 @@ import './online-room-page';
 type LobbySection='rooms'|'shop'|'items'|'friends'|'me';
 
 export class RoomLabApp extends LitElement{
-  static override styles=css`:host{display:block;min-height:100vh;background:#082a45}.boot{min-height:100vh;display:grid;place-items:center;background:#061f35;color:#dff7ff;font:700 14px system-ui}`;
+  static override styles=css`:host{display:block;min-height:100vh;min-height:100dvh;background:#082a45}.boot{min-height:100vh;min-height:100dvh;display:grid;place-items:center;background:#061f35;color:#dff7ff;font:700 14px system-ui}`;
   #account:AccountDto|null=null;
   #booting=true;
   #path=location.pathname;
@@ -23,9 +23,9 @@ export class RoomLabApp extends LitElement{
   private readonly onSignedOut=():void=>{this.#account=null;this.navigate('/');};
   private readonly onLobbyNavigate=(event:CustomEvent<{section:LobbySection}>):void=>{this.navigate(`/${event.detail.section}`);void this.refreshAccount();};
   private readonly onJoinRoom=(event:CustomEvent<{roomId:string}>):void=>this.navigate(`/room/${encodeURIComponent(event.detail.roomId)}`);
-  private readonly onPopState=():void=>{this.#path=location.pathname;this.requestUpdate();};
+  private readonly onPopState=():void=>{this.#path=location.pathname;window.scrollTo({top:0,left:0});this.requestUpdate();};
   private async refreshAccount():Promise<void>{try{const account=await api.session();if(account){this.#account=account;this.requestUpdate();}}catch{/* keep current session display until a request proves it expired */}}
-  private navigate(path:string):void{if(location.pathname!==path)history.pushState({},'',path);this.#path=path;this.requestUpdate();}
+  private navigate(path:string):void{if(location.pathname!==path)history.pushState({},'',path);this.#path=path;window.scrollTo({top:0,left:0});this.requestUpdate();}
   private replace(path:string):void{history.replaceState({},'',path);this.#path=path;}
 }
 function roomIdFromPath(path:string):string|null{const match=path.match(/^\/room\/([^/]+)$/);return match?decodeURIComponent(match[1]!):null;}

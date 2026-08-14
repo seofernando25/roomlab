@@ -88,7 +88,8 @@ export class CatalogueExplorer extends LitElement {
       ${placing ? html`
         <div class="active-tool">
           <strong>Placing ${placing.label}</strong>
-          <span>Click the floor to place · R rotates · Esc finishes</span>
+          <span>Tap or click the room to place · Esc finishes</span>
+          <button class="placement-rotate" @click=${this.rotatePlacement}>↻ Rotate 90°</button>
         </div>
       ` : nothing}
       <div class="toolbar">
@@ -214,6 +215,7 @@ export class CatalogueExplorer extends LitElement {
     return html`<button class="tool-card ${this.editor.tool === tool ? 'active' : ''}" @click=${() => this.setTool(tool)}><strong>${label}</strong>${meta}</button>`;
   }
   private placeObject(prototypeId: CatalogueObjectId, itemInstanceId?: string): void { emit(this, 'catalogue-place-object', { prototypeId, ...(itemInstanceId ? { itemInstanceId } : {}) }); }
+  private readonly rotatePlacement = (): void => emit(this, 'catalogue-rotate-placement', {});
   private chooseFloorFinish(finish: FloorFinishId): void { emit(this, 'catalogue-floor-finish', { finish }); }
   private chooseWallFinish(finish: WallFinishId): void { emit(this, 'catalogue-wall-finish', { finish }); }
   private setTool(tool: RoomEditorTool): void { emit(this, 'catalogue-tool', { tool }); }

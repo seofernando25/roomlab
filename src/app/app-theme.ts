@@ -30,5 +30,10 @@ export const appTheme = css`
   .field > span { font-size: 12px; color: #a9cada; font-weight: 700; }
   input, textarea, select { width: 100%; border: 1px solid #91b9cc; border-radius: 7px; background: #f8fcfe; color: #153248; padding: 9px 10px; outline: none; }
   input:focus, textarea:focus, select:focus { border-color: #34a6da; box-shadow: 0 0 0 3px rgba(47,169,220,.18); }
-  @media (max-width: 720px) { .card-grid { grid-template-columns: 1fr; } .section-head { align-items: start; flex-direction: column; } }
+  @media (max-width: 720px) {
+    .card-grid { grid-template-columns: 1fr; }
+    .section-head { align-items: start; flex-direction: column; }
+    .primary, .secondary, .ghost, .danger { min-height: 44px; }
+    input, textarea, select { min-height: 44px; font-size: 16px; }
+  }
 `;

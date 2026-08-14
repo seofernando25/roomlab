@@ -9,7 +9,7 @@ export class ShopPage extends LitElement {
   static override properties={account:{attribute:false}};
   declare account:AccountDto;
   static override styles=[appTheme,css`
-    :host{display:block}.tabs{display:flex;gap:8px;margin-bottom:16px}.tab{padding:8px 13px;border-radius:999px;border:1px solid #377b9d;background:#0d4769;color:#e6f8ff}.tab.active{background:#edf9fd;color:#17465f}.offer{display:grid;grid-template-rows:120px auto auto;gap:9px}.preview{background:#dcecf1;border-radius:9px;overflow:hidden}.offer-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}.seller{font-size:12px;color:#98bfd1}.notice{padding:10px 12px;border-radius:8px;background:#79303a;margin-bottom:12px}
+    :host{display:block}.tabs{display:flex;gap:8px;margin-bottom:16px}.tab{min-height:44px;padding:8px 13px;border-radius:999px;border:1px solid #377b9d;background:#0d4769;color:#e6f8ff}.tab.active{background:#edf9fd;color:#17465f}.offer{display:grid;grid-template-rows:120px auto auto;gap:9px}.preview{background:#dcecf1;border-radius:9px;overflow:hidden}.offer-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}.seller{font-size:12px;color:#98bfd1}.notice{padding:10px 12px;border-radius:8px;background:#79303a;margin-bottom:12px}
   `];
   #tab:'official'|'market'='official';#offers:readonly StoreOfferDto[]=[];#listings:readonly MarketListingDto[]=[];#loading=true;#message='';#pending=new Set<string>();
   constructor(){super();this.account={id:'',username:'',createdAt:'',balance:0};}

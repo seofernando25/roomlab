@@ -13,7 +13,20 @@ export class OnlineRoomPage extends LitElement {
   declare account: AccountDto;
   declare roomId: string;
   static override styles = css`
-    :host{display:block;position:fixed;inset:0;background:#102635;z-index:1}.loading{position:absolute;inset:0;display:grid;place-items:center;color:#dff5ff;font:700 15px system-ui;background:#102635}.back{position:fixed;left:16px;bottom:16px;z-index:80;border:1px solid #8cc9e9;border-radius:9px;padding:9px 13px;background:#0a527d;color:#fff;font:800 13px system-ui;box-shadow:0 4px 16px rgba(0,0,0,.25)}.settings{position:fixed;left:112px;bottom:16px;z-index:80;border:1px solid #8cc9e9;border-radius:9px;padding:9px 13px;background:#123d58;color:#fff;font:800 13px system-ui}.status{position:fixed;right:16px;bottom:16px;z-index:80;padding:7px 10px;border-radius:999px;background:#08263b;color:#bde6f7;border:1px solid #317b9e;font:700 11px system-ui}.status.connected{color:#7ee69e}.toast{position:fixed;left:50%;bottom:62px;z-index:90;transform:translateX(-50%);padding:9px 13px;border-radius:8px;background:#7b2e38;color:#fff;font:700 12px system-ui}
+    :host{display:block;position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;overflow:hidden;background:#102635;z-index:1;overscroll-behavior:none}
+    habbo-game{display:block;width:100%;height:100%}
+    .loading{position:absolute;inset:0;display:grid;place-items:center;color:#dff5ff;font:700 15px system-ui;background:#102635}
+    .back,.settings{position:fixed;bottom:16px;z-index:80;min-height:40px;border:1px solid #8cc9e9;border-radius:9px;padding:9px 13px;color:#fff;font:800 13px system-ui;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+    .back{left:16px;background:#0a527d}.settings{left:112px;background:#123d58}
+    .status{position:fixed;right:16px;bottom:16px;z-index:80;padding:7px 10px;border-radius:999px;background:#08263b;color:#bde6f7;border:1px solid #317b9e;font:700 11px system-ui}.status.connected{color:#7ee69e}
+    .toast{position:fixed;left:50%;bottom:62px;z-index:90;max-width:min(360px,calc(100vw - 24px));transform:translateX(-50%);padding:9px 13px;border-radius:8px;background:#7b2e38;color:#fff;font:700 12px system-ui;text-align:center}
+    @media(max-width:680px){
+      .back,.settings{left:10px;bottom:auto;width:44px;height:44px;min-height:44px;padding:0;display:grid;place-items:center;font-size:0;border-radius:10px}
+      .back{top:calc(10px + env(safe-area-inset-top))}.back::before{content:'←';font-size:22px}
+      .settings{top:calc(60px + env(safe-area-inset-top))}.settings::before{content:'⚙';font-size:19px}
+      .status{top:calc(112px + env(safe-area-inset-top));left:10px;right:auto;bottom:auto;padding:5px 8px;font-size:10px}
+      .toast{top:calc(66px + env(safe-area-inset-top));bottom:auto}
+    }
   `;
 
   #join: JoinRoomDto | null = null;
@@ -38,8 +51,8 @@ export class OnlineRoomPage extends LitElement {
       .roomSubtitle=${`by ${join.room.ownerUsername}`}
       .canEdit=${join.room.role!=='visitor'}
       @inventory-refresh=${this.refreshInventory}></habbo-game>`)}
-      <button class="back" @click=${this.leave}>← Rooms</button>
-      ${join.room.role==='owner'?html`<button class="settings" @click=${()=>{this.#settingsOpen=true;this.requestUpdate();}}>Room settings</button>`:null}
+      <button class="back" aria-label="Back to rooms" @click=${this.leave}>← Rooms</button>
+      ${join.room.role==='owner'?html`<button class="settings" aria-label="Room settings" @click=${()=>{this.#settingsOpen=true;this.requestUpdate();}}>Room settings</button>`:null}
       <div class="status ${this.#status}">${statusLabel(this.#status)}</div>
       ${this.#message?html`<div class="toast">${this.#message}</div>`:null}
       ${this.#settingsOpen&&join.room.role==='owner'?html`<room-settings-panel .room=${join.room} @room-settings-close=${()=>{this.#settingsOpen=false;this.requestUpdate();}} @room-settings-updated=${this.onSettingsUpdated}></room-settings-panel>`:null}`;

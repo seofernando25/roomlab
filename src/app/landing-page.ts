@@ -5,7 +5,7 @@ import { appTheme } from './app-theme';
 
 export class LandingPage extends LitElement {
   static override styles = [appTheme, css`
-    :host { display:block; min-height:100vh; background:#0d527d; }
+    :host { display:block; min-height:100vh; min-height:100dvh; overflow:visible; background:#0d527d; }
     .top { min-height:74px; padding:12px max(20px, calc((100vw - 1120px)/2)); display:flex; align-items:center; justify-content:space-between; background:#061f35; border-bottom:3px solid #197ea9; }
     .brand { font-size:25px; } .brand small { display:block; margin-left:8px; color:#9bc8dd; font-size:12px; font-weight:650; letter-spacing:.02em; }
     .hero { position:relative; overflow:hidden; min-height:470px; background:radial-gradient(circle at 30% 20%, #83e3fa 0, #28b8e1 38%, #0b75a7 100%); border-bottom:1px solid #9bd8ec; }
@@ -30,7 +30,8 @@ export class LandingPage extends LitElement {
     .feature:first-child { background:linear-gradient(135deg,#8a1841,#541332); }
     .feature h3 { margin:0 0 8px; font-size:21px; } .feature p { color:#bcd8e6; line-height:1.45; }
     .footer { padding:28px; text-align:center; color:#78a8c0; background:#061f35; font-size:12px; }
-    @media(max-width:800px){ .hero-inner{grid-template-columns:1fr;padding-top:20px}.visual{min-height:280px}.tagline{position:relative;left:auto;top:auto;margin-bottom:14px}.room-shot{max-height:260px;object-fit:cover}.feature-grid{grid-template-columns:1fr}.brand small{display:none} }
+    @media(max-width:800px){ .top{min-height:60px;padding:10px 14px}.hero{min-height:0;overflow:visible}.hero-inner{min-height:0;grid-template-columns:1fr;padding:18px 14px 24px;gap:18px}.visual{min-height:0;display:block}.tagline{position:relative;left:auto;top:auto;margin-bottom:14px}.tagline h1{font-size:clamp(36px,12vw,54px)}.tagline p{font-size:15px}.room-shot{width:100%;max-height:250px;object-fit:cover;transform:none;border-width:3px;border-radius:13px}.login{padding:16px}.feature-grid{grid-template-columns:1fr}.brand small{display:none}.nav-inner{overflow-x:auto;grid-template-columns:repeat(4,minmax(82px,1fr));scrollbar-width:none}.content{padding:25px 14px 38px}.content h2{font-size:25px}.footer{padding:24px 14px calc(24px + env(safe-area-inset-bottom))} }
+    @media(max-width:420px){.top .muted{font-size:11px}.brand{font-size:19px}.brand-mark{width:32px;height:32px}.nav-item{padding:12px 8px}.feature{min-height:0}}
   `];
   #busy = false;
   #error = '';

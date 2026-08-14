@@ -284,6 +284,7 @@ export class RoomScene {
     this.#canvas.dataset.playerPose = this.#player.pose;
     this.#canvas.dataset.playerDirection = String(this.#player.direction);
     this.#canvas.dataset.playerSeatedOn = this.#player.seatedOn ?? '';
+    this.#canvas.dataset.cameraState = `${this.#cameraController.target.x.toFixed(3)},${this.#cameraController.target.z.toFixed(3)},${this.#cameraController.viewHeight.toFixed(3)}`;
   }
 
   private applyHumanVisualPose(): void {

@@ -5,7 +5,7 @@ import { appTheme } from './app-theme';
 
 export class FriendsPage extends LitElement {
   static override styles=[appTheme,css`
-    :host{display:block}.request{display:flex;gap:8px;margin-bottom:16px}.request input{max-width:280px}.friend{display:flex;align-items:center;justify-content:space-between;gap:12px}.friend-main{display:flex;align-items:center;gap:10px}.avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#1d6c94;border:2px solid #86c9e5;font-weight:900}.status{font-size:12px;color:#9cc3d5}.online{color:#70e895}.actions{display:flex;gap:7px;flex-wrap:wrap}.message{margin-bottom:12px;padding:9px 11px;border-radius:8px;background:#71303a}
+    :host{display:block}.request{display:flex;gap:8px;margin-bottom:16px}.request input{max-width:280px}.friend{display:flex;align-items:center;justify-content:space-between;gap:12px}.friend-main{display:flex;align-items:center;gap:10px}.avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#1d6c94;border:2px solid #86c9e5;font-weight:900}.status{font-size:12px;color:#9cc3d5}.online{color:#70e895}.actions{display:flex;gap:7px;flex-wrap:wrap}.message{margin-bottom:12px;padding:9px 11px;border-radius:8px;background:#71303a}@media(max-width:600px){.request{flex-direction:column}.request input{max-width:none}.friend{align-items:flex-start;flex-direction:column}.actions{width:100%}.actions button{flex:1}}
   `];
   #friends:readonly FriendDto[]=[];#loading=true;#message='';#pollTimer=0;
   override connectedCallback():void{super.connectedCallback();void this.load();this.#pollTimer=window.setInterval(()=>void this.load(false),5000);}
