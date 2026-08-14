@@ -48,14 +48,14 @@ describe('world placement and occupancy', () => {
     expect(footprintFor('table', 1)).toEqual({ width: 1, depth: 2 });
   });
 
-  test('ordinary objects conflict on the same storey but identical X/Z on another storey is independent', () => {
+  test('ordinary objects conflict on the same floor height but identical X/Z on another floor height is independent', () => {
     const state = testWorld([furni('sofa', 'sofa', 1, 1)]);
     expect(isValidEntityPlacement(state, furni('chair', 'chair', 1, 1))).toBeFalse();
     const upper = reduceWorld(state, { type: 'topology/level-add', level: { id: 'upper', label: 'Upper', baseElevation: 10, cells: [{ position: { x: 1, z: 1 }, elevation: 0, floorFinish: 'wood' }], walls: [] } });
     expect(isValidEntityPlacement(upper, furni('upper-chair', 'chair', 1, 1, 0, 'upper'))).toBeTrue();
   });
 
-  test('compatible occupancy layers can share the same storey cell', () => {
+  test('compatible occupancy layers can share the same floor height cell', () => {
     const rug = furni('rug', 'test.rug', 1, 1);
     const chair = furni('chair', 'chair', 1, 1);
     const state = testWorld([rug]);
@@ -138,7 +138,7 @@ describe('catalogue and prototype composition', () => {
 });
 
 describe('authoritative world versus local editor state', () => {
-  test('selection and active storey remain local editor state', () => {
+  test('selection and active floor height remain local editor state', () => {
     const store = new GameStore();
     const revision = store.state.revision;
     const objectId = furniEntities(store.state)[0]!.id;
@@ -163,7 +163,7 @@ describe('authoritative world versus local editor state', () => {
     ]).accepted).toBeTrue();
   });
 
-  test('malformed server snapshots with unknown prototypes or storeys are rejected', () => {
+  test('malformed server snapshots with unknown prototypes or floor layers are rejected', () => {
     const store = new GameStore();
     const before = store.state;
     const badEntity: WorldEntity = {
@@ -180,7 +180,7 @@ describe('authoritative world versus local editor state', () => {
     expect(nextRotation(3)).toBe(0);
   });
 
-  test('sparse floor lookup distinguishes missing floor from another storey at same X/Z', () => {
+  test('sparse floor lookup distinguishes missing floor from another floor height at same X/Z', () => {
     const state = reduceWorld(testWorld(), { type: 'topology/level-add', level: { id: 'upper', label: 'Upper', baseElevation: 10, cells: [{ position: { x: 0, z: 0 }, elevation: 0, floorFinish: 'wood' }], walls: [] } });
     expect(roomCellAt(state.topology, addr(0, 0))).toBeDefined();
     expect(roomCellAt(state.topology, addr(0, 0, 'upper'))).toBeDefined();

@@ -12,9 +12,8 @@ import { GameStore } from '../domain/game-store';
 import { roomLevel } from '../domain/room-topology';
 import type { EntityId, FloorFinishId, RoomEditorTool, RoomLevelId, WallFinishId, WorldState } from '../domain/types';
 import { nextRotation } from '../domain/world-state';
-import { addStorey, nudgeActiveStoreyBase } from '../gameplay/room-build-operations';
+import { addFloorHeight, nudgeActiveFloorBase, setActiveFloorBase } from '../gameplay/room-build-operations';
 import { removeTeleporterPair } from '../gameplay/teleporter-editor';
-import { AVATAR_MORPH_MODES, isAvatarMorphMode, type AvatarMorphMode } from '../rendering/avatar-morph-material';
 import { CAMERA_TURN_MODES, isCameraTurnMode, type CameraTurnMode } from '../rendering/isometric-camera';
 import { RoomScene, type RoomInteractionMode } from '../rendering/room-scene';
 import type { RoomGameNetwork } from '../online/game-network';
@@ -45,7 +44,6 @@ export class HabboGame extends LitElement {
   #unsubscribeEditor: (() => void) | null = null;
   #message = '';
   #messageTimer = 0;
-  #avatarMorph: AvatarMorphMode = 'grid-warp';
   #cameraTurn: CameraTurnMode = 'snap-90';
   #interactionMode: RoomInteractionMode = 'play';
   #catalogueOpen = true;
@@ -66,7 +64,6 @@ export class HabboGame extends LitElement {
     const canvas = this.renderRoot.querySelector('canvas');
     if (!(canvas instanceof HTMLCanvasElement)) throw new Error('Room canvas was not created.');
     this.#scene = new RoomScene(canvas, this.#store, (message) => this.showMessage(message), this.network);
-    this.#scene.setAvatarMorphMode(this.#avatarMorph);
     this.#scene.setCameraTurnMode(this.#cameraTurn);
     this.#scene.setInteractionMode(this.#interactionMode);
     this.#scene.start();
@@ -101,7 +98,7 @@ export class HabboGame extends LitElement {
             <div class="badge">H</div>
             <div class="room-meta">
               <strong>${this.roomName} • ${this.roomSubtitle}</strong>
-              <span>${this.#presenceCount} here · ${floorCells} tiles · ${state.topology.levels.length} storey${state.topology.levels.length === 1 ? '' : 's'}</span>
+              <span>${this.#presenceCount} here · ${floorCells} floor tiles</span>
             </div>
           </div>
           <div class="controls" aria-label="Camera and room controls">
@@ -125,12 +122,7 @@ export class HabboGame extends LitElement {
                     <button @pointerdown=${(event: PointerEvent) => this.beginCameraTurn(event, -1)} @pointerup=${(event: PointerEvent) => this.endCameraTurn(event, -1)} @pointercancel=${(event: PointerEvent) => this.endCameraTurn(event, -1)}>↶ Left</button>
                     <button @pointerdown=${(event: PointerEvent) => this.beginCameraTurn(event, 1)} @pointerup=${(event: PointerEvent) => this.endCameraTurn(event, 1)} @pointercancel=${(event: PointerEvent) => this.endCameraTurn(event, 1)}>Right ↷</button>
                   </div>
-                  <label><span>Avatar turning</span>
-                    <select class="morph-select" aria-label="Avatar rotation morph effect" .value=${this.#avatarMorph} @change=${this.changeAvatarMorph}>
-                      ${AVATAR_MORPH_MODES.map((mode) => html`<option value=${mode}>${morphLabel(mode)}</option>`)}
-                    </select>
-                  </label>
-                  <div class="view-hint">Q / E rotate the camera · wheel zooms</div>
+                  <div class="view-hint">Q / E rotate the camera · wheel or pinch zooms</div>
                 </div>
               ` : nothing}
             </div>
@@ -138,7 +130,7 @@ export class HabboGame extends LitElement {
         </div>
 
         ${this.#message ? html`<div class="toast">${this.#message}</div>` : nothing}
-        <div class="help"><span class="tile-note">${activeLevel?.label ?? 'Room'}.</span> ${this.helpText()}</div>
+        <div class="help"><span class="tile-note">${activeLevel ? floorHeightLabel(activeLevel.baseElevation) : 'Room'}.</span> ${this.helpText()}</div>
 
         ${catalogueVisible ? html`
           <catalogue-explorer class="catalogue" .world=${state} .editor=${editor} .inventory=${this.inventory}
@@ -148,8 +140,9 @@ export class HabboGame extends LitElement {
             @catalogue-floor-finish=${this.onCatalogueFloorFinish}
             @catalogue-wall-finish=${this.onCatalogueWallFinish}
             @catalogue-level=${this.onCatalogueLevel}
-            @catalogue-add-storey=${this.onCatalogueAddStorey}
-            @catalogue-nudge-storey=${this.onCatalogueNudgeStorey}
+            @catalogue-add-height=${this.onCatalogueAddHeight}
+            @catalogue-nudge-height=${this.onCatalogueNudgeHeight}
+            @catalogue-set-height=${this.onCatalogueSetHeight}
             @catalogue-remove-teleport=${this.onCatalogueRemoveTeleport}
             @catalogue-teleport-focus=${this.onCatalogueTeleportFocus}
             @catalogue-close=${this.closeCatalogue}></catalogue-explorer>
@@ -158,7 +151,7 @@ export class HabboGame extends LitElement {
         ${this.#interactionMode === 'edit' && selected && selectedDefinition ? html`
           <hotel-panel class="selection-panel" heading="Selected" tone="green" compact>
             <div class="selection-title">${selectedDefinition.label}</div>
-            <div class="selection-meta">${getCatalogueObjectCategory(selectedDefinition.category).label} · ${selectedLevel?.label ?? 'Storey'} · ${footprintLabel(selected.prototypeId)} footprint</div>
+            <div class="selection-meta">${getCatalogueObjectCategory(selectedDefinition.category).label} · ${floorHeightLabel(selectedLevel?.baseElevation)} · ${footprintLabel(selected.prototypeId)} footprint</div>
             ${selectedCapabilities.length ? html`<div class="selection-chips">
               ${selectedCapabilities.map((capability) => html`<span class="selection-chip">${capabilityUiLabel(capability.key, capability.label)}</span>`)}
             </div>` : nothing}
@@ -180,6 +173,9 @@ export class HabboGame extends LitElement {
 
   debugScreenPointForPrototype(prototypeId: string): { x: number; y: number } | null {
     return this.#scene?.debugScreenPointForPrototype(prototypeId) ?? null;
+  }
+  debugScreenPointForCell(levelId: RoomLevelId, x: number, z: number): { x: number; y: number } | null {
+    return this.#scene?.debugScreenPointForCell({ levelId, position: { x, z } }) ?? null;
   }
   private handleLocalWorldChange(change: import('../domain/types').WorldChange): void {
     const result = forwardPredictedInventoryPlacement(change, this.network, this.#pendingPlacementItemId);
@@ -233,12 +229,16 @@ export class HabboGame extends LitElement {
   private readonly onCatalogueLevel = (event: Event): void => {
     this.#store.dispatchEditor({ type: 'active-level/set', levelId: (event as CustomEvent<{ levelId: RoomLevelId }>).detail.levelId });
   };
-  private readonly onCatalogueAddStorey = (): void => {
-    const level = addStorey(this.#store);
-    this.showMessage(level ? `${level.label} added. Click a ghost tile to start its floor.` : 'Could not add another storey.');
+  private readonly onCatalogueAddHeight = (): void => {
+    const level = addFloorHeight(this.#store);
+    this.showMessage(level ? `${floorHeightLabel(level.baseElevation)} ready. Click a ghost tile to start building there.` : 'Could not add another floor height.');
   };
-  private readonly onCatalogueNudgeStorey = (event: Event): void => {
-    const result = nudgeActiveStoreyBase(this.#store, (event as CustomEvent<{ delta: number }>).detail.delta);
+  private readonly onCatalogueNudgeHeight = (event: Event): void => {
+    const result = nudgeActiveFloorBase(this.#store, (event as CustomEvent<{ delta: number }>).detail.delta);
+    if (!result.accepted && result.message) this.showMessage(result.message);
+  };
+  private readonly onCatalogueSetHeight = (event: Event): void => {
+    const result = setActiveFloorBase(this.#store, (event as CustomEvent<{ value: number }>).detail.value);
     if (!result.accepted && result.message) this.showMessage(result.message);
   };
   private readonly onCatalogueRemoveTeleport = (event: Event): void => {
@@ -269,11 +269,6 @@ export class HabboGame extends LitElement {
     if (!result.accepted) this.showMessage('Move anything stacked on this object before picking it up.');
   };
 
-  private readonly changeAvatarMorph = (event: Event): void => {
-    const value = (event.currentTarget as HTMLSelectElement).value;
-    if (!isAvatarMorphMode(value)) return;
-    this.#avatarMorph = value; this.#scene?.setAvatarMorphMode(value); this.requestUpdate();
-  };
   private readonly changeCameraTurn = (event: Event): void => {
     const value = (event.currentTarget as HTMLSelectElement).value;
     if (!isCameraTurnMode(value)) return;
@@ -296,5 +291,5 @@ export class HabboGame extends LitElement {
 
 
 customElements.define('habbo-game', HabboGame);
-function morphLabel(mode: AvatarMorphMode): string { return mode === 'off' ? 'No transition' : mode === 'dither' ? 'Dither' : mode === 'grid-warp' ? 'Grid warp' : 'Pixel transport'; }
+function floorHeightLabel(value?: number): string { return value === undefined || value === 0 ? 'Ground' : `${value > 0 ? '+' : ''}${value} steps`; }
 function turnLabel(mode: CameraTurnMode): string { return mode === 'free' ? 'Free rotation' : mode === 'snap-45' ? '45° steps' : '90° steps'; }

@@ -3,7 +3,6 @@ import { actorEntities, entityById } from '../domain/entity-queries';
 import { floorWorldY } from '../domain/room-topology';
 import type { EntityId, WorldEntity, WorldState } from '../domain/types';
 import { seatPoseForVisualTransform, seatTargetsFor } from '../gameplay/seating-system';
-import type { AvatarMorphMode } from './avatar-morph-material';
 import { HumanAvatar } from './human-avatar';
 
 interface RemoteVisual {
@@ -20,7 +19,6 @@ export class RemoteActorsRenderer {
   readonly group = new THREE.Group();
   readonly #visuals = new Map<EntityId, RemoteVisual>();
   #state: WorldState;
-  #morphMode: AvatarMorphMode = 'grid-warp';
 
   constructor(
     state: WorldState,
@@ -42,11 +40,6 @@ export class RemoteActorsRenderer {
       this.#visuals.delete(id);
     }
     for (const entity of actors) this.syncActor(entity);
-  }
-
-  setMorphMode(mode: AvatarMorphMode): void {
-    this.#morphMode = mode;
-    for (const visual of this.#visuals.values()) visual.avatar.setMorphMode(mode);
   }
 
   update(cameraYaw: number, camera: THREE.Camera, deltaSeconds: number): void {
@@ -86,7 +79,6 @@ export class RemoteActorsRenderer {
     let visual = this.#visuals.get(entity.id);
     if (!visual) {
       const avatar = new HumanAvatar(Math.round(actor.direction) as 0|1|2|3|4|5|6|7);
-      avatar.setMorphMode(this.#morphMode);
       visual = { avatar, x: base.x, y: base.y, z: base.z, targetX: base.x, targetY: base.y, targetZ: base.z };
       this.#visuals.set(entity.id, visual);
       this.group.add(avatar);

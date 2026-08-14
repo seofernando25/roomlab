@@ -41,6 +41,7 @@ export class IsometricCameraController {
   #distance = 14;
   #viewHeight = 9.5;
   #targetViewHeight = 9.5;
+  #maxViewHeight = 13.5;
   #aspect = 1;
 
   constructor(width: number, depth: number) {
@@ -80,6 +81,7 @@ export class IsometricCameraController {
     const width = this.#maxX - this.#minX;
     const depth = this.#maxZ - this.#minZ;
     this.#distance = Math.max(this.#distance, Math.max(width, depth) * 1.55);
+    this.updateZoomRange();
     this.target.x = THREE.MathUtils.clamp(this.target.x, this.#minX - 2, this.#maxX + 2);
     this.target.z = THREE.MathUtils.clamp(this.target.z, this.#minZ - 2, this.#maxZ + 2);
   }
@@ -121,11 +123,12 @@ export class IsometricCameraController {
 
   zoomByFactor(factor: number): void {
     if (!Number.isFinite(factor) || factor <= 0) return;
-    this.#targetViewHeight = THREE.MathUtils.clamp(this.#targetViewHeight * factor, 4.2, 13.5);
+    this.#targetViewHeight = THREE.MathUtils.clamp(this.#targetViewHeight * factor, 4.2, this.#maxViewHeight);
   }
 
   resize(width: number, height: number): void {
     this.#aspect = width / Math.max(1, height);
+    this.updateZoomRange();
     this.applyProjection();
   }
 
@@ -166,6 +169,14 @@ export class IsometricCameraController {
     );
     this.camera.lookAt(this.target);
     this.camera.updateMatrixWorld();
+  }
+
+  private updateZoomRange(): void {
+    const roomWidth = Math.max(1, this.#maxX - this.#minX);
+    const roomDepth = Math.max(1, this.#maxZ - this.#minZ);
+    const portraitFit = (roomWidth + 2.5) / Math.max(0.35, this.#aspect);
+    this.#maxViewHeight = Math.min(28, Math.max(13.5, roomDepth + 3, portraitFit));
+    this.#targetViewHeight = Math.min(this.#targetViewHeight, this.#maxViewHeight);
   }
 
   private applyProjection(): void {

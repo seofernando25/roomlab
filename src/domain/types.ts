@@ -25,12 +25,12 @@ export interface Footprint {
 
 export interface RoomCell {
   readonly position: GridPoint;
-  /** Local sculpting offset in floor steps, relative to the storey's base elevation. */
+  /** Local sculpting offset in floor steps, relative to this floor layer's base height. */
   readonly elevation: number;
   readonly floorFinish: FloorFinishId;
 }
 
-/** A unit wall edge owned by a storey. Axis x spans (x,z)->(x+1,z); axis z spans (x,z)->(x,z+1). */
+/** A unit wall edge owned by a floor-height layer. Axis x spans (x,z)->(x+1,z); axis z spans (x,z)->(x,z+1). */
 export interface WallSegment {
   readonly axis: WallAxis;
   readonly x: number;
@@ -41,13 +41,13 @@ export interface WallSegment {
 export interface RoomLevel {
   readonly id: RoomLevelId;
   readonly label: string;
-  /** Base storey height in the same integer step units used by RoomCell.elevation. */
+  /** Base floor height in the same integer step units used by RoomCell.elevation. */
   readonly baseElevation: number;
   readonly cells: readonly RoomCell[];
   readonly walls: readonly WallSegment[];
 }
 
-/** Sparse stacked architecture. Multiple storeys may contain floor at the same X/Z. */
+/** Sparse stacked architecture. Multiple floor-height layers may contain floor at the same X/Z. */
 export interface RoomTopology {
   readonly levels: readonly RoomLevel[];
 }

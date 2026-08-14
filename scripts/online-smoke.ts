@@ -8,6 +8,7 @@ const dbPath = process.env.ONLINE_SMOKE_DB ?? `/tmp/roomlab-online-smoke-${proce
 const errors: string[] = [];
 let server: ReturnType<typeof Bun.spawn> | null = null;
 let browser: Browser | null = null;
+let expectedDisconnect = false;
 
 interface Hover { x:number; y:number; action:string; cell:string; kind:string; valid:string; }
 
@@ -22,17 +23,33 @@ async function restartServer(): Promise<void> {
   server?.kill(); await server?.exited.catch(()=>{}); server=null; await Bun.sleep(250); await startServer();
 }
 async function waitFor(check:()=>Promise<boolean>|boolean, timeout:number, label:string):Promise<void>{const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await Bun.sleep(75);}throw new Error(`Timed out waiting for ${label}`);}
-function watch(page:Page,label:string):void{page.on('pageerror',e=>errors.push(`${label}: page: ${e.message}`));page.on('console',m=>{if(m.type()==='error')errors.push(`${label}: console: ${m.text()}`);});}
+function watch(page:Page,label:string):void{page.on('pageerror',e=>errors.push(`${label}: page: ${e.message}`));page.on('console',m=>{if(m.type()!=='error')return;const text=m.text();if(expectedDisconnect&&text.includes('ERR_CONNECTION_REFUSED'))return;errors.push(`${label}: console: ${text}`);});}
 async function signup(page:Page,username:string):Promise<void>{await page.goto(`${base}/`,{waitUntil:'domcontentloaded'});await page.locator('landing-page input[name=username]').fill(username);await page.locator('landing-page button.primary').click();await page.locator('rooms-page').waitFor({state:'visible',timeout:8_000});}
 const game=(page:Page)=>page.locator('online-room-page habbo-game');
 const canvas=(page:Page)=>game(page).locator('canvas');
 async function canvasData(page:Page):Promise<Record<string,string>>{return canvas(page).evaluate((element:any)=>({playerCell:element.dataset.playerCell??'',playerPose:element.dataset.playerPose??'',remoteActors:element.dataset.remoteActors??'',remoteActorCells:element.dataset.remoteActorCells??'',topology:element.dataset.topologySignature??'',objects:element.dataset.objectPrototypes??'',remoteManipulations:element.dataset.remoteManipulations??'',humanReady:element.dataset.humanReady??'',humanError:element.dataset.humanError??''}));}
-async function findHover(page:Page, action:string, accept:(h:Hover)=>boolean=()=>true):Promise<Hover>{for(let y=125;y<=800;y+=34)for(let x=70;x<=1370;x+=34){await page.mouse.move(x,y);await page.waitForTimeout(2);const d=await canvas(page).evaluate((c:any)=>({action:c.dataset.hoverAction??'',cell:c.dataset.hoverCell??'',kind:c.dataset.hoverObjectKind??'',valid:c.dataset.hoverValid??''}));const h={x,y,...d};if(h.action===action&&h.cell&&h.valid!=='false'&&accept(h))return h;}throw new Error(`Could not find hover target ${action}`);}
+async function findHover(page:Page, action:string, accept:(h:Hover)=>boolean=()=>true):Promise<Hover>{
+  const points=await game(page).evaluate((element:any)=>{const result:{x:number;y:number}[]=[];for(let z=0;z<8;z+=1)for(let x=0;x<10;x+=1){const point=element.debugScreenPointForCell?.('ground',x,z);if(point)result.push(point);}return result;});
+  for(const point of points){await page.mouse.move(point.x,point.y);const d=await canvas(page).evaluate((c:any)=>({action:c.dataset.hoverAction??'',cell:c.dataset.hoverCell??'',kind:c.dataset.hoverObjectKind??'',valid:c.dataset.hoverValid??''}));const h={x:point.x,y:point.y,...d};if(h.action===action&&h.cell&&h.valid!=='false'&&accept(h))return h;}
+  throw new Error(`Could not find projected hover target ${action}`);
+}
 async function api<T>(page:Page,path:string,options:{method?:string;body?:unknown}={}):Promise<T>{return page.evaluate(async({path,options})=>{const init:RequestInit={method:options.method??'GET'};if(options.body!==undefined){init.headers={'content-type':'application/json'};init.body=JSON.stringify(options.body);}const r=await fetch(path,init);const data=await r.json();if(!r.ok)throw new Error(data.error??`HTTP ${r.status}`);return data;},{path,options}) as Promise<T>;}
-async function createRoom(page:Page,name:string):Promise<string>{await page.locator('rooms-page button.primary').filter({hasText:'New room'}).click();await page.locator('rooms-page input[name=name]').fill(name);await page.locator('rooms-page form.create button.primary').click();await game(page).waitFor({state:'visible',timeout:10_000});return new URL(page.url()).pathname;}
+async function createRoom(page:Page,name:string):Promise<string>{
+  await page.locator('rooms-page button.primary').filter({hasText:'New room'}).click();
+  await page.locator('rooms-page input[name=name]').fill(name);
+  await page.locator('rooms-page form.create button.primary').click();
+  try { await game(page).waitFor({state:'visible',timeout:10_000}); }
+  catch (error) {
+    const roomsText=await page.locator('rooms-page').textContent().catch(()=>null);
+    const roomText=await page.locator('online-room-page').textContent().catch(()=>null);
+    throw new Error(`Room creation did not enter game. url=${page.url()} rooms=${JSON.stringify(roomsText?.slice(0,240)??'')} online=${JSON.stringify(roomText?.slice(0,240)??'')} cause=${error instanceof Error?error.message:String(error)}`);
+  }
+  return new URL(page.url()).pathname;
+}
 async function waitRemoteCount(page:Page,count:number):Promise<void>{await waitFor(async()=>Number((await canvasData(page)).remoteActors)===count,8_000,`remote actor count ${count}`);}
 async function enterEdit(page:Page):Promise<void>{const button=game(page).locator('.mode-btn');if((await button.textContent())?.includes('Edit room'))await button.click();}
 async function leaveEdit(page:Page):Promise<void>{const button=game(page).locator('.mode-btn');if((await button.textContent())?.includes('Done'))await button.click();}
+const phase=(name:string):void=>console.log(`[online-smoke] ${name}`);
 
 try {
   if (!existsSync('dist/index.html')) throw new Error('Build dist first with bun run build.');
@@ -42,6 +59,7 @@ try {
   const aliceContext=await browser.newContext({viewport:{width:1440,height:900}}), bobContext=await browser.newContext({viewport:{width:1440,height:900}});
   const alice=await aliceContext.newPage(), bob=await bobContext.newPage();watch(alice,'alice');watch(bob,'bob');
 
+  phase('accounts and room join');
   await signup(alice,aliceName);
   await alice.screenshot({path:'artifacts/online-lobby.png',fullPage:true});
   const roomPath=await createRoom(alice,`Open Beta ${suffix}`);
@@ -55,6 +73,7 @@ try {
   await Promise.all([waitRemoteCount(alice,1),waitRemoteCount(bob,1)]);
   if(!(await game(alice).locator('.room-meta').textContent())?.includes('2 here'))errors.push('presence: Alice did not show 2 here');
 
+  phase('delegated build rights');
   // Owner-managed build rights update a connected visitor immediately and authorize a real edit.
   const settingsButton=alice.locator('online-room-page .settings');await settingsButton.click();
   let settings=alice.locator('room-settings-panel');await settings.waitFor({state:'visible'});
@@ -80,6 +99,7 @@ try {
   await waitFor(async()=>await game(bob).locator('.mode-btn').count()===0,5_000,'live editor rights revoke');
   await settings.locator('.close').click();
 
+  phase('movement and topology replication');
   // Client-predicted movement must settle at the same authoritative cell on the other browser.
   const beforeMove=await canvasData(alice);
   const walk=await findHover(alice,'walk',h=>h.cell!==beforeMove.playerCell);
@@ -100,6 +120,7 @@ try {
   await alice.mouse.click(floorEditPoint.x,floorEditPoint.y);
   await waitFor(async()=> (await canvasData(bob)).topology!==bobTopology,8_000,'topology replication');
 
+  phase('inventory placement and seated manipulation');
   // Place one real inventory chair through the Catalogue.
   await game(alice).locator('.catalogue-open').click(); await catalogue.waitFor({state:'visible'});
   await catalogue.locator('.rail button').filter({hasText:'Objects'}).click();
@@ -143,6 +164,7 @@ try {
   await waitFor(async()=> (await game(bob).locator('.room-meta').textContent())?.includes('1 here')??false,5_000,'presence after leaving');
   await bob.locator('online-room-page .back').click();await bob.locator('rooms-page').waitFor({state:'visible'});
 
+  phase('shop and marketplace');
   // Official store purchase updates wallet and mints a new owned item instance.
   await alice.locator('lobby-shell .nav button').filter({hasText:'Shop'}).click();const shop=alice.locator('shop-page');await shop.waitFor({state:'visible'});
   const balanceBefore=(await api<{account:{balance:number}}>(alice,'/api/session')).account.balance;
@@ -158,6 +180,7 @@ try {
   const marketCard=bobShop.locator('.offer').filter({hasText:aliceName}).first();await marketCard.waitFor({state:'visible',timeout:5_000});await marketCard.locator('button.primary').click();
   await waitFor(async()=> !(await api<{listings:any[]}>(bob,'/api/market/listings')).listings.some(l=>l.sellerUsername===aliceName),5_000,'market transfer close');
 
+  phase('friends');
   // Username-based friends: request, accept, then both sides become accepted.
   await alice.locator('lobby-shell .nav button').filter({hasText:'Friends'}).click();const aliceFriends=alice.locator('friends-page');await aliceFriends.waitFor({state:'visible'});await aliceFriends.locator('input[name=username]').fill(bobName);await aliceFriends.locator('button.primary').filter({hasText:'Add friend'}).click();
   await bob.locator('lobby-shell .nav button').filter({hasText:'Friends'}).click();const bobFriends=bob.locator('friends-page');await bobFriends.waitFor({state:'visible'});
@@ -165,11 +188,12 @@ try {
   await waitFor(async()=>{const f=await api<{friends:{username:string;status:string}[]}>(alice,'/api/friends');return f.friends.some(x=>x.username===bobName&&x.status==='accepted');},5_000,'accepted friendship');
   await alice.screenshot({path:'artifacts/online-friends.png',fullPage:true});
 
+  phase('restart and reconnect');
   // Persistent rooms and session credentials survive a server restart; the client reconnects with a fresh room-session id.
   await alice.locator('lobby-shell .nav button').filter({hasText:'Rooms'}).click();await alice.locator('rooms-page').waitFor({state:'visible'});
   const oldRoomCard=alice.locator('rooms-page .room-card').filter({hasText:`Open Beta ${suffix}`}).first();await oldRoomCard.locator('button.join').click();await game(alice).waitFor({state:'visible'});
-  const oldGame=game(alice);await waitFor(async()=> (await alice.locator('online-room-page .status').textContent())==='Live',5_000,'pre-restart live status');
-  if(!process.env.ONLINE_SMOKE_URL){await restartServer();await waitFor(async()=> (await alice.locator('online-room-page .status').textContent())==='Live',20_000,'post-restart reconnect');await game(alice).waitFor({state:'visible'});if(oldGame===game(alice)){/* locator identity is not meaningful; keyed DOM replacement is covered by fresh hello. */}}
+  const oldGame=game(alice);const connectionStatus=()=>alice.locator('online-room-page').getAttribute('data-connection-status');await waitFor(async()=> (await connectionStatus())==='connected',5_000,'pre-restart connected status');
+  if(!process.env.ONLINE_SMOKE_URL){expectedDisconnect=true;try{await restartServer();await waitFor(async()=> (await connectionStatus())!=='connected',8_000,'restart disconnect observed');await waitFor(async()=> (await connectionStatus())==='connected',20_000,'post-restart reconnect');await game(alice).waitFor({state:'visible'});}finally{expectedDisconnect=false;}if(oldGame===game(alice)){/* locator identity is not meaningful; keyed DOM replacement is covered by fresh hello. */}}
   const persisted=await api<{rooms:{name:string}[]}>(alice,'/api/rooms?scope=mine');if(!persisted.rooms.some(r=>r.name===`Open Beta ${suffix}`))errors.push('persistence: room missing after restart');
 
   const finalAlice=await canvasData(alice);

@@ -66,7 +66,7 @@ export class LandingPage extends LitElement {
       <main class="content">
         <h2>What’s happening in Room Lab</h2>
         <div class="feature-grid">
-          <article class="feature"><div class="eyebrow">Build together</div><h3>Stack it, sculpt it, move it live</h3><p>Multi-storey floors, walls, traversal pieces, teleport links and object stacking all use the same authoritative room model.</p></article>
+          <article class="feature"><div class="eyebrow">Build together</div><h3>Stack it, sculpt it, move it live</h3><p>Floor heights, walls, traversal pieces, teleport links and object stacking all use the same authoritative room model.</p></article>
           <article class="feature"><div class="eyebrow">Rooms</div><h3>Visit people</h3><p>Make a room, browse active spaces, jump into a friend’s room and keep building while visitors play.</p></article>
           <article class="feature"><div class="eyebrow">Economy</div><h3>Collect & trade</h3><p>Buy official furniture with credits or list a specific item on the player Marketplace.</p></article>
         </div>

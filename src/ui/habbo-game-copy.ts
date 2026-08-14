@@ -14,7 +14,7 @@ export function roomHelpText(mode: RoomInteractionMode, turnMode: CameraTurnMode
   if (editor.tool === 'floor-raise' || editor.tool === 'floor-lower') return 'Drag across floor to sculpt height · Esc returns to Select';
   if (editor.tool === 'wall-shape') return 'Wall Shape: drag from an edge to draw or remove walls · Esc returns to Select';
   if (editor.tool === 'wall-paint') return 'Drag across existing walls to change their finish · Esc returns to Select';
-  if (editor.tool === 'teleport-pair') return editor.pendingAnchor ? 'Entrance A chosen · switch storey if needed, then choose B · Esc cancels' : 'Choose entrance A, then exit B · Esc cancels';
+  if (editor.tool === 'teleport-pair') return editor.pendingAnchor ? 'Entrance A chosen · switch build height if needed, then choose B · Esc cancels' : 'Choose entrance A, then exit B · Esc cancels';
   return hasSelection ? 'Drag selected object · R rotates · Delete picks up · Esc deselects · drag empty room to pan' : 'Click an object to select it · drag empty room to pan · wheel to zoom · Catalogue contains building tools';
 }
 

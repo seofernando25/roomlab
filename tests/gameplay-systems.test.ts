@@ -47,7 +47,7 @@ describe('actor navigation and traversal', () => {
     expect(directionForStep(center, { x: 1, z: 1 })).toBe(7);
   });
 
-  test('pathfinding avoids solid objects on the same storey', () => {
+  test('pathfinding avoids solid objects on the same floor height', () => {
     const state = testWorld([furni('table', 'table', 1, 1)], 4, 3, { x: 0, z: 1 });
     const path = findActorPath(state, TEST_ACTOR_ID, addr(0, 1), addr(3, 1));
     expect(path).not.toBeNull();
@@ -70,7 +70,7 @@ describe('actor navigation and traversal', () => {
     expect(canTraverseCell({ actorId: TEST_ACTOR_ID, state: store.state }, addr(1, 1))).toBeTrue();
   });
 
-  test('automatic gates only react to actors on the same storey', () => {
+  test('automatic gates only react to actors on the same floor height', () => {
     const gate = furni('gate', 'test.auto-gate', 1, 1);
     const store = new GameStore(testWorld([gate], 6, 4, { x: 0, z: 1 }));
     expect(updateAutomaticGates(store, OWNER_PROVIDER)).toBe(1);
@@ -99,7 +99,7 @@ describe('actor navigation and traversal', () => {
 });
 
 describe('seating system', () => {
-  test('seat metadata rotates facing and retains the object storey', () => {
+  test('seat metadata rotates facing and retains the object floor height', () => {
     const chair = furni('chair', 'chair', 1, 1, 0);
     const eastChair = furni('chair-east', 'chair', 1, 1, 1, 'upper');
     expect(seatTargetFor(chair)?.direction).toBe(0);
@@ -107,7 +107,7 @@ describe('seating system', () => {
     expect(seatTargetFor(eastChair)?.cell.levelId).toBe('upper');
   });
 
-  test('seat attachment follows live object transform, pickup lift and storey identity', () => {
+  test('seat attachment follows live object transform, pickup lift and floor-layer identity', () => {
     const seat = seatTargetFor(furni('chair', 'chair', 1, 1, 0, 'upper'))!;
     const moved = seatPoseForVisualTransform(seat, 3.5, 2.8, 4.5, -Math.PI / 2, 0.28);
     expect(moved.x).toBeCloseTo(3.52, 2);
@@ -161,7 +161,7 @@ describe('interaction resolution', () => {
       .toEqual({ type: 'blocked', cell: addr(1, 1) });
   });
 
-  test('teleport destination includes storey and headless teleport can cross storeys', () => {
+  test('teleport destination includes floor height and headless teleport can cross floor heights', () => {
     let state = reduceWorld(testWorld([], 4, 3, { x: 0, z: 1 }), {
       type: 'topology/level-add',
       level: { id: 'upper', label: 'Upper', baseElevation: 10, cells: [{ position: { x: 2, z: 1 }, elevation: 0, floorFinish: 'wood' }], walls: [] },

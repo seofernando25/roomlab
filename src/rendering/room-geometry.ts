@@ -13,7 +13,7 @@ import type { FadingWall } from './wall-visibility';
 const FLOOR_THICKNESS = 0.07;
 export const ROOM_WALL_HEIGHT = 2.65;
 
-/** Rebuildable sparse multi-storey room architecture. */
+/** Rebuildable sparse multi-height room architecture. */
 export class RoomArchitectureRenderer {
   readonly group = new THREE.Group();
   #walls: FadingWall[] = [];

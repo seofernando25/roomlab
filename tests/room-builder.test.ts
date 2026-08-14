@@ -17,12 +17,13 @@ import { ActorMotionSystem } from '../src/gameplay/actor-motion-system';
 import { cellBuildTargetValid, wallBuildTargetValid } from '../src/gameplay/build-preview';
 import { findActorPath } from '../src/gameplay/navigation-system';
 import {
-  addStorey,
+  addFloorHeight,
   commitFloorPropertyBrush,
   commitFloorShape,
   commitWallShape,
   floorShapeIntent,
-  nudgeActiveStoreyBase,
+  nudgeActiveFloorBase,
+  setActiveFloorBase,
 } from '../src/gameplay/room-build-operations';
 import { createTeleporterPair, removeTeleporterPair, teleporterPairs } from '../src/gameplay/teleporter-editor';
 import { addr, furni, GROUND, TEST_ACTOR_ID, testWorld } from './helpers';
@@ -36,7 +37,7 @@ function editor(tool: EditorState['tool'] = 'floor-shape', levelId = GROUND): Ed
   };
 }
 
-describe('sparse floor shape and storeys', () => {
+describe('sparse floor shape and build heights', () => {
   test('Floor Shape adds from a ghost neighbor and can immediately branch sideways', () => {
     const store = new GameStore(testWorld([], 2, 2));
     const east = addr(2, 1);
@@ -76,9 +77,9 @@ describe('sparse floor shape and storeys', () => {
     expect(commitFloorPropertyBrush(store, 'floor-raise', [addr(0, 0)]).accepted).toBeFalse();
   });
 
-  test('a second storey can contain floor directly above the same ground X/Z', () => {
+  test('another floor height can contain floor directly above the same ground X/Z', () => {
     const store = new GameStore(testWorld([], 3, 2));
-    const upper = addStorey(store)!;
+    const upper = addFloorHeight(store)!;
     expect(upper.baseElevation).toBe(10);
     expect(roomLevel(store.state.topology, upper.id)?.cells).toHaveLength(0);
     const sameXZ = addr(1, 1, upper.id);
@@ -88,15 +89,16 @@ describe('sparse floor shape and storeys', () => {
     expect(roomCellAt(store.state.topology, sameXZ)).toBeDefined();
   });
 
-  test('storey base height is independent from per-tile sculpting and cannot collide with another storey base', () => {
+  test('floor base height is independent from per-tile sculpting and cannot collide with another floor height base', () => {
     const store = new GameStore(testWorld());
-    const upper = addStorey(store)!;
-    expect(nudgeActiveStoreyBase(store, -1).accepted).toBeTrue();
-    expect(roomLevel(store.state.topology, upper.id)?.baseElevation).toBe(9);
-    for (let i = 0; i < 8; i += 1) expect(nudgeActiveStoreyBase(store, -1).accepted).toBeTrue();
-    expect(roomLevel(store.state.topology, upper.id)?.baseElevation).toBe(1);
-    expect(nudgeActiveStoreyBase(store, -1).accepted).toBeFalse();
-    expect(roomLevel(store.state.topology, upper.id)?.baseElevation).toBe(1);
+    const upper = addFloorHeight(store)!;
+    expect(setActiveFloorBase(store, 17).accepted).toBeTrue();
+    expect(roomLevel(store.state.topology, upper.id)?.baseElevation).toBe(17);
+    expect(nudgeActiveFloorBase(store, -1).accepted).toBeTrue();
+    expect(roomLevel(store.state.topology, upper.id)?.baseElevation).toBe(16);
+    expect(setActiveFloorBase(store, 0).accepted).toBeFalse();
+    expect(setActiveFloorBase(store, 999).accepted).toBeFalse();
+    expect(roomLevel(store.state.topology, upper.id)?.baseElevation).toBe(16);
   });
 
   test('build preview delegates to the same floor legality rules', () => {
@@ -136,7 +138,7 @@ describe('objects with traversal capability', () => {
     expect(findActorPath(withStairs, TEST_ACTOR_ID, addr(0, 0), addr(1, 0))).toBeNull();
   });
 
-  test('multi-piece stair runs can climb toward a high storey using intermediate sculpted landings', () => {
+  test('multi-piece stair runs can climb toward a high floor using intermediate sculpted landings', () => {
     let state = testWorld([], 4, 1, { x: 0, z: 0 });
     state = reduceWorld(state, { type: 'topology/cells-update', updates: [
       { levelId: GROUND, position: { x: 1, z: 0 }, elevation: 2 },
@@ -196,10 +198,10 @@ describe('wall shape and visibility semantics', () => {
   });
 });
 
-describe('linked teleports across storeys', () => {
-  test('pair creation is atomic and reciprocal across different storeys', () => {
+describe('linked teleports across build heights', () => {
+  test('pair creation is atomic and reciprocal across different floor heights', () => {
     const store = new GameStore(testWorld([], 4, 2));
-    const upper = addStorey(store)!;
+    const upper = addFloorHeight(store)!;
     expect(commitFloorShape(store, 'add', [addr(3, 1, upper.id)]).accepted).toBeTrue();
     expect(createTeleporterPair(store, addr(1, 1), addr(3, 1, upper.id))).toBeTrue();
     const pair = teleporterPairs(store.state)[0]!;
@@ -207,9 +209,9 @@ describe('linked teleports across storeys', () => {
     expect(pair.second.components.teleporter?.targetEntityId).toBe(pair.first.id);
   });
 
-  test('teleport endpoints may use the same X/Z on different storeys', () => {
+  test('teleport endpoints may use the same X/Z on different floor heights', () => {
     const store = new GameStore(testWorld([], 3, 2));
-    const upper = addStorey(store)!;
+    const upper = addFloorHeight(store)!;
     expect(commitFloorShape(store, 'add', [addr(1, 1, upper.id)]).accepted).toBeTrue();
     expect(createTeleporterPair(store, addr(1, 1), addr(1, 1, upper.id))).toBeTrue();
     const pair = teleporterPairs(store.state)[0]!;
@@ -222,7 +224,7 @@ describe('linked teleports across storeys', () => {
     expect(createTeleporterPair(store, addr(1, 1), addr(3, 1))).toBeTrue();
   });
 
-  test('switching storeys while choosing endpoint B preserves endpoint A', () => {
+  test('switching build heights while choosing endpoint B preserves endpoint A', () => {
     const anchor = addr(1, 1);
     let state = editor('teleport-pair');
     state = reduceEditor(state, { type: 'pending-anchor/set', cell: anchor });
@@ -230,9 +232,9 @@ describe('linked teleports across storeys', () => {
     expect(state.pendingAnchor).toEqual(anchor);
   });
 
-  test('click-style teleporter motion walks to A then changes storey at B', () => {
+  test('click-style teleporter motion walks to A then changes floor height at B', () => {
     const store = new GameStore(testWorld([], 4, 2, { x: 0, z: 1 }));
-    const upper = addStorey(store)!;
+    const upper = addFloorHeight(store)!;
     commitFloorShape(store, 'add', [addr(3, 1, upper.id)]);
     createTeleporterPair(store, addr(1, 1), addr(3, 1, upper.id));
     const source = teleporterPairs(store.state)[0]!.first;

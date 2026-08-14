@@ -169,13 +169,11 @@ try {
   const viewMenu = host.locator('.view-menu');
   await viewMenu.waitFor({ state: 'visible' });
   await viewMenu.locator('.turn-select').selectOption('free');
-  await viewMenu.locator('.morph-select').selectOption('pixel-transport');
   await page.keyboard.down('q');
   await page.waitForTimeout(320);
   await page.screenshot({ path: 'artifacts/ui-view-menu.png', fullPage: true });
   await page.keyboard.up('q');
   await viewMenu.locator('.turn-select').selectOption('snap-90');
-  await viewMenu.locator('.morph-select').selectOption('grid-warp');
   await host.locator('.view-open').click();
 
   const sofaTarget = await findHoverTarget(page, 'sit', (state) => state.kind === 'sofa');
@@ -216,9 +214,8 @@ try {
   if (await host.locator('.controls > .mode-btn, .controls > .catalogue-open, .controls > .view-control > .view-open').count() !== 3) {
     errors.push('edit controls: expected Done, Catalogue and View as primary controls');
   }
-  if (await catalogue.locator('.storey-settings').getAttribute('open') !== null) errors.push('Storey settings should be collapsed by default');
   const catalogueText = (await catalogue.textContent()) ?? '';
-  for (const internalTerm of ['revision', 'composable', 'sparse', 'bidirectionally', ' · traversal']) {
+  for (const internalTerm of ['revision', 'composable', 'sparse', 'bidirectionally', ' · traversal', 'storey']) {
     if (catalogueText.toLowerCase().includes(internalTerm.toLowerCase())) errors.push(`Catalogue leaks internal copy: ${internalTerm}`);
   }
 
@@ -285,14 +282,14 @@ try {
   await floorTab.click();
   expectText(await catalogue.locator('.tool-card.active').textContent(), 'Shape', 'Floor tab cancels hidden object placement');
 
-  await catalogue.locator('.add-storey').click();
-  phase('second storey');
+  await catalogue.locator('.add-height').click();
+  phase('second build height');
   await page.waitForFunction(() => {
     const catalogue = document.querySelector('habbo-game')?.shadowRoot?.querySelector('catalogue-explorer');
-    return catalogue?.shadowRoot?.querySelectorAll('.level').length === 2;
+    return catalogue?.shadowRoot?.querySelectorAll('.height-choice').length === 2;
   });
-  const levelButtons = catalogue.locator('.level');
-  expectText(await levelButtons.last().textContent(), 'Storey 2', 'new storey label');
+  const levelButtons = catalogue.locator('.height-choice');
+  expectText(await levelButtons.last().textContent(), '+10 steps', 'new build height label');
 
   const firstFloor = await findBuildTarget(page, 'build-floor-shape');
   await page.mouse.click(firstFloor.x, firstFloor.y);
@@ -309,11 +306,17 @@ try {
     await page.mouse.click(thirdFloor.x, thirdFloor.y);
     await page.waitForTimeout(100);
   }
-  expectText(await catalogue.locator('.storey-heading small').textContent(), 'tiles', 'storey tile count');
-  await catalogue.locator('.storey-settings summary').click();
-  await catalogue.locator('.storey-settings-body').waitFor({ state: 'visible' });
-  expectText(await catalogue.locator('.storey-settings-body').textContent(), 'Base height moves the whole storey', 'advanced storey explanation');
-  await page.screenshot({ path: 'artifacts/ui-floor-storey.png', fullPage: true });
+  expectText(await catalogue.locator('.height-heading small').textContent(), 'tiles', 'build-height tile count');
+  const heightAdjust = catalogue.locator('.height-adjust');
+  await heightAdjust.locator('button').first().click();
+  await page.waitForTimeout(80);
+  const heightInput = heightAdjust.locator('.height-input');
+  if (await heightInput.inputValue() !== '9') errors.push('Floor base height: expected step control to move from 10 to 9');
+  await heightInput.fill('14');
+  await heightInput.blur();
+  await page.waitForTimeout(80);
+  if (await heightInput.inputValue() !== '14') errors.push('Floor base height: expected typed height 14 to persist');
+  await page.screenshot({ path: 'artifacts/ui-floor-height.png', fullPage: true });
 
   await objectsTab.click();
   phase('object stacking');
@@ -351,7 +354,7 @@ try {
 
   await levelButtons.first().click();
   await page.waitForTimeout(120);
-  expectText(await catalogue.locator('.hint').textContent(), 'Entrance A', 'teleport A survives storey switch');
+  expectText(await catalogue.locator('.hint').textContent(), 'Entrance A', 'teleport A survives build-height switch');
   const teleportB = await findBuildTarget(page, 'build-teleport-pair');
   await page.mouse.click(teleportB.x, teleportB.y);
   await page.waitForTimeout(180);
@@ -381,7 +384,7 @@ try {
       'artifacts/room.png',
       'artifacts/ui-view-menu.png',
       'artifacts/ui-catalogue.png',
-      'artifacts/ui-floor-storey.png',
+      'artifacts/ui-floor-height.png',
       'artifacts/ui-object-stacking.png',
       'artifacts/ui-walls.png',
       'artifacts/ui-travel.png',

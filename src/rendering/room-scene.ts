@@ -3,13 +3,12 @@ import { entityById, furniEntities, LOCAL_PLAYER_ID } from '../domain/entity-que
 import type { GameStore } from '../domain/game-store';
 import { FLOOR_STEP_HEIGHT, floorWorldY, levelBaseWorldY, roomLevel, topologyBounds } from '../domain/room-topology';
 import { entityElevationSteps, spatialProfileForEntity } from '../domain/spatial-index';
-import type { EntityId, RoomTopology, TransformComponent, WorldEntity, WorldState } from '../domain/types';
+import type { CellAddress, EntityId, RoomTopology, TransformComponent, WorldEntity, WorldState } from '../domain/types';
 import { ActorMotionSystem } from '../gameplay/actor-motion-system';
 import { createPlayerInteractionDispatcher } from '../gameplay/player-interactions';
 import { seatPoseForVisualTransform } from '../gameplay/seating-system';
 import { createRoomSimulation, type SimulationPipeline } from '../gameplay/simulation-pipeline';
 import type { RoomGameNetwork } from '../online/game-network';
-import type { AvatarMorphMode } from './avatar-morph-material';
 import { createObjectVisual } from './object-factory';
 import { ObjectMotion } from './object-motion';
 import { HumanAvatar } from './human-avatar';
@@ -20,6 +19,7 @@ import { addRoomLighting } from './room-lighting';
 import { RoomInteractionController, type RoomInteractionMode } from './room-interaction-controller';
 import { RemoteActorsRenderer } from './remote-actors-renderer';
 import { forwardRoomNetworkChange, roomAccessProvider, syncRoomDiagnostics } from './room-network-bridge';
+import { projectWorldPointToCanvas } from './screen-projection';
 import { TeleportLinkRenderer } from './teleport-link-renderer';
 import { WallVisibilitySystem } from './wall-visibility';
 
@@ -115,11 +115,12 @@ export class RoomScene {
     const entity = furniEntities(this.#store.state).find((candidate) => candidate.prototypeId === prototypeId);
     const object = entity ? this.#objects.get(entity.id) : null;
     if (!object?.visible) return null;
-    const point = new THREE.Box3().setFromObject(object).getCenter(new THREE.Vector3()).project(this.#cameraController.camera);
-    const rect = this.#canvas.getBoundingClientRect();
-    return { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 };
+    return projectWorldPointToCanvas(new THREE.Box3().setFromObject(object).getCenter(new THREE.Vector3()), this.#cameraController.camera, this.#canvas);
   }
-
+  debugScreenPointForCell(address: CellAddress): { x: number; y: number } | null {
+    if (!roomLevel(this.#store.state.topology, address.levelId)?.cells.some((cell) => cell.position.x === address.position.x && cell.position.z === address.position.z)) return null;
+    return projectWorldPointToCanvas(new THREE.Vector3(address.position.x + 0.5, floorWorldY(this.#store.state.topology, address) + 0.02, address.position.z + 0.5), this.#cameraController.camera, this.#canvas);
+  }
   dispose(): void {
     cancelAnimationFrame(this.#animationFrame);
     this.#resizeObserver.disconnect();
@@ -138,7 +139,6 @@ export class RoomScene {
   beginCameraTurn(direction: -1 | 1): void { this.#cameraController.beginTurn(direction); }
   endCameraTurn(direction?: -1 | 1): void { this.#cameraController.endTurn(direction); }
   setCameraTurnMode(mode: CameraTurnMode): void { this.#cameraController.setTurnMode(mode); }
-  setAvatarMorphMode(mode: AvatarMorphMode): void { this.#human.setMorphMode(mode); this.#remotes.setMorphMode(mode); }
   setTeleportFocus(entityId: EntityId | null): void { this.#teleportLinks.setFocusedEntity(entityId); }
 
   applyRemoteManipulation(entityId: EntityId, transform: TransformComponent, lift: number): void {

@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { avatarMorphModeId, createAvatarMorphMaterial, type AvatarMorphMode } from './avatar-morph-material';
 import {
   authoredDirection,
   loadHumanTextureLibrary,
@@ -18,14 +17,19 @@ const AVATAR_HEIGHT = 1.72;
 const WALK_FRAME_RATE = 8;
 
 export class HumanAvatar extends THREE.Group {
-  readonly #material = createAvatarMorphMaterial();
+  readonly #material = new THREE.MeshBasicMaterial({
+    depthTest: true,
+    depthWrite: true,
+    transparent: false,
+    alphaTest: 0.10,
+    side: THREE.DoubleSide,
+  });
   readonly #plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.#material);
   readonly #pixelTransport = new HumanPixelTransport();
   readonly #sitPixelTransport = new HumanPixelTransport();
   #library: HumanTextureLibrary | null = null;
   #worldDirection: HumanDirection;
   #worldDirectionValue: number;
-  #mode: AvatarMorphMode = 'grid-warp';
   #pose: HumanPose = 'stand';
   #elevation = 0;
   #animationTime = 0;
@@ -75,11 +79,6 @@ export class HumanAvatar extends THREE.Group {
     this.updatePlaneHeight();
   }
 
-  setMorphMode(mode: AvatarMorphMode): void {
-    this.#mode = mode;
-    this.#material.uniforms.uMode!.value = avatarMorphModeId(mode);
-  }
-
   update(cameraYaw: number, camera: THREE.Camera, deltaSeconds = 0): void {
     this.#plane.quaternion.copy(camera.quaternion);
     const yawDelta = cameraYaw - this.#lastCameraYaw;
@@ -120,50 +119,30 @@ export class HumanAvatar extends THREE.Group {
     }
     this.#lastSitRelativeValue = relativeValue;
 
-    if (this.#mode === 'off'
-      || blend.progress <= MORPH_ENDPOINT_EPSILON
-      || blend.progress >= 1 - MORPH_ENDPOINT_EPSILON) {
+    if (blend.progress <= MORPH_ENDPOINT_EPSILON || blend.progress >= 1 - MORPH_ENDPOINT_EPSILON) {
       const direction = blend.progress >= 1 - MORPH_ENDPOINT_EPSILON ? blend.to : blend.from;
       this.applySingle(textures.get(direction));
       return;
     }
 
-    const from = textures.get(blend.from);
-    const to = textures.get(blend.to);
-    if (!from || !to) return;
-
-    if (this.#mode === 'pixel-transport') {
-      const forward = this.#sitTransportDirection > 0;
-      const sourceDirection = forward ? blend.from : blend.to;
-      const targetDirection = forward ? blend.to : blend.from;
-      const progress = forward ? blend.progress : 1 - blend.progress;
-      const source = textures.get(sourceDirection);
-      const target = textures.get(targetDirection);
-      if (!source || !target) return;
-      this.applySingle(this.#sitPixelTransport.render(
-        sourceDirection,
-        targetDirection,
-        source,
-        target,
-        progress,
-        this.#sitTransportDirection,
-      ));
-      return;
-    }
-
-    this.#material.uniforms.uMode!.value = avatarMorphModeId(this.#mode);
-    this.#material.uniforms.uFrom!.value = from;
-    this.#material.uniforms.uTo!.value = to;
-    this.#material.uniforms.uProgress!.value = blend.progress;
-    this.#plane.visible = true;
+    const forward = this.#sitTransportDirection > 0;
+    const sourceDirection = forward ? blend.from : blend.to;
+    const targetDirection = forward ? blend.to : blend.from;
+    const progress = forward ? blend.progress : 1 - blend.progress;
+    const source = textures.get(sourceDirection);
+    const target = textures.get(targetDirection);
+    if (!source || !target) return;
+    this.applySingle(this.#sitPixelTransport.render(
+      sourceDirection,
+      targetDirection,
+      source,
+      target,
+      progress,
+      this.#sitTransportDirection,
+    ));
   }
 
   private applyStandingView(textures: ReadonlyMap<HumanDirection, THREE.CanvasTexture>, cameraYaw: number): void {
-    if (this.#mode === 'off') {
-      this.applySingle(textures.get(relativeHumanDirection(this.#worldDirection, cameraYaw)));
-      return;
-    }
-
     const blend = relativeHumanDirectionBlend(this.#worldDirection, cameraYaw);
     if (blend.progress <= MORPH_ENDPOINT_EPSILON || blend.progress >= 1 - MORPH_ENDPOINT_EPSILON) {
       const direction = blend.progress >= 1 - MORPH_ENDPOINT_EPSILON ? blend.to : blend.from;
@@ -171,35 +150,29 @@ export class HumanAvatar extends THREE.Group {
       return;
     }
 
-    if (this.#mode === 'pixel-transport') {
-      const sourceDirection = this.#cameraDirection > 0 ? blend.to : blend.from;
-      const targetDirection = this.#cameraDirection > 0 ? blend.from : blend.to;
-      const progress = this.#cameraDirection > 0 ? 1 - blend.progress : blend.progress;
-      const source = textures.get(sourceDirection);
-      const target = textures.get(targetDirection);
-      if (!source || !target) return;
-      this.applySingle(this.#pixelTransport.render(
-        sourceDirection, targetDirection, source, target, progress, this.#cameraDirection,
-      ));
-      return;
-    }
-
-    const from = textures.get(blend.from);
-    const to = textures.get(blend.to);
-    if (!from || !to) return;
-    this.#material.uniforms.uMode!.value = avatarMorphModeId(this.#mode);
-    this.#material.uniforms.uFrom!.value = from;
-    this.#material.uniforms.uTo!.value = to;
-    this.#material.uniforms.uProgress!.value = blend.progress;
-    this.#plane.visible = true;
+    const sourceDirection = this.#cameraDirection > 0 ? blend.to : blend.from;
+    const targetDirection = this.#cameraDirection > 0 ? blend.from : blend.to;
+    const progress = this.#cameraDirection > 0 ? 1 - blend.progress : blend.progress;
+    const source = textures.get(sourceDirection);
+    const target = textures.get(targetDirection);
+    if (!source || !target) return;
+    this.applySingle(this.#pixelTransport.render(
+      sourceDirection,
+      targetDirection,
+      source,
+      target,
+      progress,
+      this.#cameraDirection,
+    ));
   }
 
   private applySingle(texture?: THREE.Texture): void {
     if (!texture) return;
-    this.#material.uniforms.uFrom!.value = texture;
-    this.#material.uniforms.uTo!.value = texture;
-    this.#material.uniforms.uMode!.value = 0;
-    this.#material.uniforms.uProgress!.value = 0;
+    if (this.#material.map !== texture) {
+      const hadMap = this.#material.map !== null;
+      this.#material.map = texture;
+      if (!hadMap) this.#material.needsUpdate = true;
+    }
     this.#plane.visible = true;
   }
 
@@ -257,6 +230,7 @@ function createGroundShadow(): THREE.Mesh {
   );
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = 0.002;
+  mesh.renderOrder = -1;
   return mesh;
 }
 

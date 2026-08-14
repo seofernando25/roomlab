@@ -13,9 +13,11 @@ import type {
 
 export const DEFAULT_LEVEL_ID = 'ground';
 export const FLOOR_STEP_HEIGHT = 0.28;
-export const DEFAULT_STOREY_HEIGHT_STEPS = 10;
+export const DEFAULT_FLOOR_HEIGHT_STEPS = 10;
 export const MIN_FLOOR_ELEVATION = -2;
 export const MAX_FLOOR_ELEVATION = 8;
+export const MIN_FLOOR_BASE = -40;
+export const MAX_FLOOR_BASE = 120;
 export const AUTO_STEP_DELTA = 1;
 
 export interface TopologyBounds {
@@ -185,9 +187,10 @@ export function applyTopologyAction(topology: RoomTopology, action: TopologyActi
   }
   if (action.type === 'topology/level-base-set') {
     const baseElevation = Math.round(action.baseElevation);
+    if (baseElevation < MIN_FLOOR_BASE || baseElevation > MAX_FLOOR_BASE) return topology;
     if (topology.levels.some((level) => level.id !== action.levelId && level.baseElevation === baseElevation)) return topology;
     return updateLevel(topology, action.levelId, (level) =>
-      baseElevation === level.baseElevation ? level : { ...level, baseElevation });
+      baseElevation === level.baseElevation ? level : { ...level, baseElevation, label: floorHeightLabel(baseElevation) });
   }
   if (action.type === 'topology/cells-add') {
     return updateLevel(topology, action.levelId, (level) => {
@@ -280,6 +283,7 @@ function perimeterWalls(width: number, depth: number): WallSegment[] {
 function clampElevation(value: number): number {
   return Math.max(MIN_FLOOR_ELEVATION, Math.min(MAX_FLOOR_ELEVATION, Math.round(value)));
 }
+function floorHeightLabel(value: number): string { return value === 0 ? 'Ground' : `${value > 0 ? '+' : ''}${value} steps`; }
 function cellKey(cell: GridPoint): string { return `${cell.x},${cell.z}`; }
 function sameCell(a: GridPoint, b: GridPoint): boolean { return a.x === b.x && a.z === b.z; }
 const CARDINALS = [{ x: 1, z: 0 }, { x: -1, z: 0 }, { x: 0, z: 1 }, { x: 0, z: -1 }] as const;

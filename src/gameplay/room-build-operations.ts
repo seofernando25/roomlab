@@ -1,5 +1,5 @@
 import type { GameStore } from '../domain/game-store';
-import { DEFAULT_STOREY_HEIGHT_STEPS, roomCellAt, roomLevel, sortedLevels, suggestedNewCell, wallAt } from '../domain/room-topology';
+import { DEFAULT_FLOOR_HEIGHT_STEPS, MAX_FLOOR_BASE, MIN_FLOOR_BASE, roomCellAt, roomLevel, sortedLevels, suggestedNewCell, wallAt } from '../domain/room-topology';
 import type { CellAddress, GridPoint, RoomCellUpdate, RoomLevel, WallSegment, WorldAction, WorldState } from '../domain/types';
 import { isValidEntityPlacement, resolveSupportedPlacement } from '../domain/world-placement';
 import { createFurniEntity, reduceWorld } from '../domain/world-state';
@@ -38,7 +38,7 @@ export function commitFloorShape(
     actions.push(action);
     preview = next;
   }
-  if (!actions.length) return { accepted: false, message: 'Add floor next to an existing tile. On an empty storey, start above a lower floor.' };
+  if (!actions.length) return { accepted: false, message: 'Add floor next to an existing tile. At a new build height, start above a lower floor.' };
   return store.dispatchBatch(actions).accepted ? { accepted: true } : { accepted: false, message: 'That floor shape edit is not valid.' };
 }
 
@@ -113,7 +113,7 @@ export function stepTeleportPair(store: GameStore, address: CellAddress): BuildO
   const anchor = store.editorState.pendingAnchor;
   if (!anchor) {
     store.dispatchEditor({ type: 'pending-anchor/set', cell: address });
-    return { accepted: true, message: 'Teleport A selected. Choose B on this or another storey.' };
+    return { accepted: true, message: 'Teleport A selected. Choose B at this or another floor height.' };
   }
   if (sameAddress(anchor, address)) {
     store.dispatchEditor({ type: 'pending-anchor/set', cell: null });
@@ -124,14 +124,15 @@ export function stepTeleportPair(store: GameStore, address: CellAddress): BuildO
   return { accepted: true, message: 'Teleport pair linked in both directions.' };
 }
 
-export function addStorey(store: GameStore): RoomLevel | null {
+export function addFloorHeight(store: GameStore): RoomLevel | null {
   const levels = sortedLevels(store.state.topology);
   const highest = levels.at(-1);
-  const number = levels.length + 1;
+  const baseElevation = (highest?.baseElevation ?? 0) + DEFAULT_FLOOR_HEIGHT_STEPS;
+  if (baseElevation > MAX_FLOOR_BASE) return null;
   const level: RoomLevel = {
     id: `level:${crypto.randomUUID()}`,
-    label: `Storey ${number}`,
-    baseElevation: (highest?.baseElevation ?? 0) + DEFAULT_STOREY_HEIGHT_STEPS,
+    label: heightLabel(baseElevation),
+    baseElevation,
     cells: [],
     walls: [],
   };
@@ -141,12 +142,23 @@ export function addStorey(store: GameStore): RoomLevel | null {
   return level;
 }
 
-export function nudgeActiveStoreyBase(store: GameStore, deltaSteps: number): BuildOperationResult {
+export function setActiveFloorBase(store: GameStore, baseElevation: number): BuildOperationResult {
   const level = roomLevel(store.state.topology, store.editorState.activeLevelId);
-  if (!level) return { accepted: false, message: 'Active storey no longer exists.' };
-  const baseElevation = level.baseElevation + deltaSteps;
-  const result = store.dispatch({ type: 'topology/level-base-set', levelId: level.id, baseElevation });
-  return result.accepted ? { accepted: true } : { accepted: false, message: 'That storey base height is unchanged.' };
+  if (!level) return { accepted: false, message: 'Active floor height no longer exists.' };
+  if (!Number.isFinite(baseElevation)) return { accepted: false, message: 'Choose a valid floor height.' };
+  const rounded = Math.round(baseElevation);
+  if (rounded < MIN_FLOOR_BASE || rounded > MAX_FLOOR_BASE) return { accepted: false, message: `Floor base height must stay between ${MIN_FLOOR_BASE} and ${MAX_FLOOR_BASE} steps.` };
+  const result = store.dispatch({ type: 'topology/level-base-set', levelId: level.id, baseElevation: rounded });
+  return result.accepted ? { accepted: true } : { accepted: false, message: 'That floor height is already in use or unchanged.' };
+}
+
+export function nudgeActiveFloorBase(store: GameStore, deltaSteps: number): BuildOperationResult {
+  const level = roomLevel(store.state.topology, store.editorState.activeLevelId);
+  return level ? setActiveFloorBase(store, level.baseElevation + deltaSteps) : { accepted: false, message: 'Active floor height no longer exists.' };
+}
+
+function heightLabel(baseElevation: number): string {
+  return baseElevation === 0 ? 'Ground' : `${baseElevation > 0 ? '+' : ''}${baseElevation} steps`;
 }
 
 function uniqueAddresses(addresses: readonly CellAddress[]): readonly CellAddress[] {

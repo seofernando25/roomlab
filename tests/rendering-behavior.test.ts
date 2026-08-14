@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import * as THREE from 'three';
-import { AVATAR_MORPH_MODES, isAvatarMorphMode } from '../src/rendering/avatar-morph-material';
 import { CATALOGUE_PREVIEW_OBJECT_YAW } from '../src/rendering/catalogue-thumbnail-renderer';
 import { ObjectMotion, shortestAngleDelta } from '../src/rendering/object-motion';
 import { authoredDirection, relativeHumanDirection, relativeHumanDirectionBlend, relativeSitDirectionBlend } from '../src/rendering/human-avatar';
@@ -52,10 +51,7 @@ describe('eight-direction human rendering', () => {
     expect(relativeHumanDirection(3, 0)).toBe(4);
   });
 
-  test('morph modes stay stable and blend through directional sectors', () => {
-    expect(AVATAR_MORPH_MODES).toEqual(['off', 'dither', 'grid-warp', 'pixel-transport']);
-    expect(isAvatarMorphMode('grid-warp')).toBe(true);
-    expect(isAvatarMorphMode('smeary-bilinear')).toBe(false);
+  test('pixel transport blends through directional sectors', () => {
     expect(relativeHumanDirectionBlend(3, Math.PI / 4)).toEqual({ from: 3, to: 4, progress: 0 });
     expect(relativeHumanDirectionBlend(3, Math.PI / 2)).toEqual({ from: 2, to: 3, progress: 0 });
     expect(relativeHumanDirectionBlend(3, 3 * Math.PI / 4)).toEqual({ from: 1, to: 2, progress: 0 });
@@ -97,5 +93,19 @@ describe('camera turn modes', () => {
     camera.endTurn(1);
     camera.update(0.25);
     expect(camera.yaw).toBeGreaterThanOrEqual(movingYaw);
+  });
+
+  test('portrait viewports can zoom out far enough to frame a wide room', () => {
+    const portrait = new IsometricCameraController(10, 8);
+    portrait.resize(390, 844);
+    portrait.zoomByFactor(100);
+    for (let i = 0; i < 12; i += 1) portrait.update(0.2);
+    expect(portrait.viewHeight).toBeGreaterThan(24);
+
+    const landscape = new IsometricCameraController(10, 8);
+    landscape.resize(844, 390);
+    landscape.zoomByFactor(100);
+    for (let i = 0; i < 12; i += 1) landscape.update(0.2);
+    expect(landscape.viewHeight).toBeLessThanOrEqual(13.6);
   });
 });

@@ -56,6 +56,7 @@ export class CameraPointerControls {
     canvas.addEventListener('pointercancel', this.onPointerCancel);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
     canvas.addEventListener('contextmenu', this.onContextMenu);
+    canvas.addEventListener('dblclick', this.onDoubleClick);
   }
 
   dispose(): void {
@@ -65,6 +66,7 @@ export class CameraPointerControls {
     this.#canvas.removeEventListener('pointercancel', this.onPointerCancel);
     this.#canvas.removeEventListener('wheel', this.onWheel);
     this.#canvas.removeEventListener('contextmenu', this.onContextMenu);
+    this.#canvas.removeEventListener('dblclick', this.onDoubleClick);
     this.#pointers.clear();
   }
 
@@ -182,6 +184,7 @@ export class CameraPointerControls {
     this.#camera.zoom(event.deltaY);
   };
 
+  private readonly onDoubleClick = (event: MouseEvent): void => event.preventDefault();
   private readonly onContextMenu = (event: MouseEvent): void => event.preventDefault();
 }
 

@@ -89,7 +89,7 @@ Edit mode includes a searchable/category-filterable **Catalogue** driven entirel
 
 `src/rendering/` owns Three.js and presentation interpolation. `room-scene.ts` synchronizes entity state to render objects and runs the camera/render loop; game rules stay in `src/gameplay/`.
 
-The avatar uses authored standing/walking/sitting directional sprites. Optional avatar-only morph modes are Off, Dither, Grid Warp, and full Pixel Transport. Pixel Transport uses 2×2 clusters, a 0.5% authored-endpoint stabilization window, and silhouette-constrained filling. The room itself remains true 3D and is never postprocessed through the avatar morph.
+The avatar uses authored standing/walking/sitting directional sprites with **Pixel Transport as the single directional transition**. Pixel Transport uses 2×2 clusters, a 0.5% authored-endpoint stabilization window, and silhouette-constrained filling; there is no player-facing avatar tuning mode. The room itself remains true 3D and is never postprocessed through the avatar transition.
 
 Rendering uses nearest-sampled procedural materials, restrained toon shading, baked/contact-style grounding, and no hard dynamic shadow maps.
 
@@ -115,7 +115,7 @@ bun run smoke:mobile # 390x844 touch scrolling, gestures, room UI and Catalogue 
 bun run visual:qa # optional OpenRouter visual comparison against references/
 ```
 
-The desktop smoke exercises camera modes, morph modes, floor hover, click-to-walk, authored walking, click-to-sit, Play/Edit switching, the Catalogue, seated furniture pickup/dragging, Pixel Transport during seated chair rotation, panning, zoom, adding furni, rotation, and WebGL sizing. Browser console/page errors fail the smoke pass. The mobile smoke additionally verifies real touch scrolling on the landing page, fixed bottom lobby navigation, tap-to-walk, one-finger camera panning, two-finger pinch zoom, full-viewport canvas behavior, and touch-sized Catalogue controls.
+The desktop smoke exercises camera modes, floor hover, click-to-walk, authored walking, click-to-sit, Play/Edit switching, the Catalogue, direct floor-base-height editing, seated furniture pickup/dragging, Pixel Transport during seated chair rotation, panning, zoom, adding objects, rotation, and WebGL sizing. Browser console/page errors fail the smoke pass. The mobile smoke additionally verifies real touch scrolling on the landing/lobby, compact Shop rows, tap-to-walk, one-finger camera panning, pinch zoom including the wider portrait zoom-out range, double-tap browser-zoom suppression on the room canvas, full-viewport canvas behavior, and touch-sized Catalogue controls.
 
 Interaction screenshots are written under `artifacts/`, including `room.png`, `room-editor.png`, `furni-explorer.png`, `avatar-walk.png`, `avatar-sit.png`, `avatar-sit-furni-hover.png`, and `avatar-sit-furni-rotate-transport.png`.
 

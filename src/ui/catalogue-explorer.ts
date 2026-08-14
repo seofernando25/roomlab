@@ -6,7 +6,7 @@ import {
   type CatalogueObjectId,
 } from '../domain/catalogue-registry';
 import { FLOOR_FINISHES, WALL_FINISHES } from '../domain/room-finishes';
-import { sortedLevels } from '../domain/room-topology';
+import { MAX_FLOOR_BASE, MIN_FLOOR_BASE, sortedLevels } from '../domain/room-topology';
 import type { EditorState, EntityId, FloorFinishId, RoomEditorTool, RoomLevelId, WallFinishId, WorldState } from '../domain/types';
 import type { InventoryItemDto } from '../online/types';
 import { teleporterPairs } from '../gameplay/teleporter-editor';
@@ -60,7 +60,7 @@ export class CatalogueExplorer extends LitElement {
             ${this.sectionButton('travel', '↔', 'Travel')}
           </nav>
           <main class="main">
-            ${this.renderStoreys()}
+            ${this.renderBuildHeight()}
             ${this.section === 'objects' ? this.renderObjects()
               : this.section === 'floor' ? this.renderFloor()
                 : this.section === 'walls' ? this.renderWalls() : this.renderTravel()}
@@ -159,11 +159,11 @@ export class CatalogueExplorer extends LitElement {
     const pairs = teleporterPairs(this.world);
     return html`
       <div class="pairing">
-        <div><strong>Linked teleporters</strong><span>Pick entrance A, then exit B. You can switch storeys between clicks.</span></div>
+        <div><strong>Linked teleporters</strong><span>Pick entrance A, then exit B. You can switch build heights between clicks.</span></div>
         <button class="action primary" @click=${this.togglePairing}>${this.editor.tool === 'teleport-pair' ? 'Cancel' : 'Link pair'}</button>
       </div>
       ${this.editor.tool === 'teleport-pair' && this.editor.pendingAnchor ? html`
-        <div class="hint"><strong>Entrance A:</strong> ${this.levelLabel(this.editor.pendingAnchor.levelId)} ${coord(this.editor.pendingAnchor.position)}. Choose B on any storey.</div>
+        <div class="hint"><strong>Entrance A:</strong> ${this.levelLabel(this.editor.pendingAnchor.levelId)} ${coord(this.editor.pendingAnchor.position)}. Choose B at any build height.</div>
       ` : nothing}
       <div class="pair-list">
         ${pairs.length ? pairs.map((pair, index) => html`
@@ -176,33 +176,27 @@ export class CatalogueExplorer extends LitElement {
     `;
   }
 
-  private renderStoreys() {
+  private renderBuildHeight() {
     const levels = sortedLevels(this.world.topology);
     const active = levels.find((level) => level.id === this.editor.activeLevelId);
     return html`
-      <section class="storey-context" aria-label="Active storey">
-        <div class="storey-heading">
-          <span><strong>Storey</strong><small>${active ? `${active.label} · ${active.cells.length} tile${active.cells.length === 1 ? '' : 's'}` : 'Choose a storey'}</small></span>
-          <button class="action primary add-storey" title="Add another storey" @click=${this.addStorey}>+ Storey</button>
+      <section class="height-context" aria-label="Build height">
+        <div class="height-heading">
+          <span><strong>Build height</strong><small>${active ? `${baseHeightLabel(active.baseElevation)} · ${active.cells.length} tile${active.cells.length === 1 ? '' : 's'}` : 'Choose a floor height'}</small></span>
+          <button class="action primary add-height" title="Add another floor height" @click=${this.addHeight}>+ New height</button>
         </div>
-        <div class="levels">
+        <div class="height-levels">
           ${levels.map((level) => html`
-            <button class="level ${level.id === this.editor.activeLevelId ? 'active' : ''}" @click=${() => this.setLevel(level.id)}>
-              <strong>${level.label}</strong><span>${level.cells.length} tile${level.cells.length === 1 ? '' : 's'}</span>
+            <button class="height-choice ${level.id === this.editor.activeLevelId ? 'active' : ''}" @click=${() => this.setLevel(level.id)}>
+              <strong>${baseHeightLabel(level.baseElevation)}</strong><span>${level.cells.length} tile${level.cells.length === 1 ? '' : 's'}</span>
             </button>
           `)}
         </div>
         ${active ? html`
-          <details class="storey-settings">
-            <summary>Storey settings · ${baseHeightLabel(active.baseElevation)}</summary>
-            <div class="storey-settings-body">
-              <p>Base height moves the whole storey. Use Raise/Lower in the Floor tab for individual tiles.</p>
-              <div>
-                <button class="action" @click=${() => this.nudgeStorey(-1)}>Lower base</button>
-                <button class="action" @click=${() => this.nudgeStorey(1)}>Raise base</button>
-              </div>
-            </div>
-          </details>
+          <div class="height-adjust">
+            <span>Floor base height</span>
+            <div><button class="action" aria-label="Lower floor base height" @click=${() => this.nudgeHeight(-1)}>−</button><input class="height-input" type="number" step="1" min=${MIN_FLOOR_BASE} max=${MAX_FLOOR_BASE} .value=${String(active.baseElevation)} aria-label="Floor base height in steps" @change=${this.setHeightFromInput}><button class="action" aria-label="Raise floor base height" @click=${() => this.nudgeHeight(1)}>+</button></div>
+          </div>
         ` : nothing}
       </section>
     `;
@@ -221,8 +215,11 @@ export class CatalogueExplorer extends LitElement {
   private setTool(tool: RoomEditorTool): void { emit(this, 'catalogue-tool', { tool }); }
   private readonly togglePairing = (): void => this.setTool(this.editor.tool === 'teleport-pair' ? 'select' : 'teleport-pair');
   private setLevel(levelId: RoomLevelId): void { emit(this, 'catalogue-level', { levelId }); }
-  private readonly addStorey = (): void => { this.section = 'floor'; emit(this, 'catalogue-add-storey', {}); };
-  private nudgeStorey(delta: number): void { emit(this, 'catalogue-nudge-storey', { delta }); }
+  private readonly addHeight = (): void => { this.section = 'floor'; emit(this, 'catalogue-add-height', {}); };
+  private nudgeHeight(delta: number): void { emit(this, 'catalogue-nudge-height', { delta }); }
+  private readonly setHeightFromInput = (event: Event): void => {
+    emit(this, 'catalogue-set-height', { value: Number((event.currentTarget as HTMLInputElement).value) });
+  };
   private removePair(id: EntityId): void { emit(this, 'catalogue-remove-teleport', { id }); }
   private focusPair(id: EntityId | null): void { emit(this, 'catalogue-teleport-focus', { id }); }
   private readonly close = (): void => emit(this, 'catalogue-close', {});
@@ -249,7 +246,8 @@ export class CatalogueExplorer extends LitElement {
   }
 
   private levelLabel(levelId: RoomLevelId): string {
-    return this.world.topology.levels.find((level) => level.id === levelId)?.label ?? 'Storey';
+    const level = this.world.topology.levels.find((entry) => entry.id === levelId);
+    return level ? baseHeightLabel(level.baseElevation) : 'Unknown height';
   }
 
   private endpointLabel(entity: { components: { transform: { levelId: string; position: { x: number; z: number } } } }): string {
