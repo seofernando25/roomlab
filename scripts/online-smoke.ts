@@ -1,9 +1,11 @@
 import { existsSync, rmSync } from 'node:fs';
-import { chromium, type Browser, type Page } from 'playwright-core';
+import { chromium, type Browser, type Page } from './webview-browser';
 
 const port = Number(process.env.ONLINE_SMOKE_PORT ?? 4182);
 const base = process.env.ONLINE_SMOKE_URL ?? `http://127.0.0.1:${port}`;
-const chromiumPath = process.env.CHROMIUM_PATH ?? '/usr/bin/chromium';
+const aliceBase = process.env.ONLINE_SMOKE_URL ?? `http://alice.127.0.0.1.nip.io:${port}`;
+const bobBase = process.env.ONLINE_SMOKE_URL ?? `http://bob.127.0.0.1.nip.io:${port}`;
+const chromiumPath = process.env.CHROMIUM_PATH;
 const dbPath = process.env.ONLINE_SMOKE_DB ?? `/tmp/roomlab-online-smoke-${process.pid}.sqlite`;
 const errors: string[] = [];
 let server: ReturnType<typeof Bun.spawn> | null = null;
@@ -17,7 +19,7 @@ interface Hover { x:number; y:number; action:string; cell:string; kind:string; v
 async function startServer(): Promise<void> {
   server = Bun.spawn(['bun','run','server/index.ts'], {
     cwd: process.cwd(), stdout:'pipe', stderr:'pipe',
-    env: { ...process.env, PORT:String(port), ROOMLAB_DB:dbPath, NODE_ENV:'production' },
+    env: { ...process.env, PORT:String(port), ROOMLAB_DB:dbPath, NODE_ENV:'test' },
   });
   await waitFor(async()=>{try{return (await fetch(`${base}/api/health`)).ok;}catch{return false;}},12_000,'server health');
 }
@@ -41,7 +43,7 @@ const receivedCount=(page:Page,type:string):number=>counters.get(page)?.received
 const inventoryGetCount=(page:Page):number=>counters.get(page)?.inventoryGets??0;
 const roomGetCount=(page:Page):number=>counters.get(page)?.roomGets??0;
 function parseCell(value:string):{x:number;z:number}|null{const[x,z]=value.split(',').map(Number);return Number.isFinite(x)&&Number.isFinite(z)?{x:x!,z:z!}:null;}
-async function signup(page:Page,username:string):Promise<void>{await page.goto(`${base}/`,{waitUntil:'domcontentloaded'});await page.locator('landing-page input[name=username]').fill(username);await page.locator('landing-page button.primary').click();await page.locator('rooms-page').waitFor({state:'visible',timeout:8_000});}
+async function signup(page:Page,username:string,origin=aliceBase):Promise<void>{await page.goto(`${origin}/`,{waitUntil:'domcontentloaded'});await page.locator('landing-page input[name=username]').fill(username);await page.locator('landing-page button.primary').click();await page.locator('rooms-page').waitFor({state:'visible',timeout:8_000});}
 const game=(page:Page)=>page.locator('online-room-page habbo-game');
 const canvas=(page:Page)=>game(page).locator('canvas[aria-label="Playable and editable isometric hotel room"]');
 async function canvasData(page:Page):Promise<Record<string,string>>{return canvas(page).evaluate((element:any)=>({playerCell:element.dataset.playerCell??'',playerPose:element.dataset.playerPose??'',remoteActors:element.dataset.remoteActors??'',remoteActorCells:element.dataset.remoteActorCells??'',remoteActorStates:element.dataset.remoteActorStates??'',topology:element.dataset.topologySignature??'',objects:element.dataset.objectPrototypes??'',objectCells:element.dataset.objectCells??'',customAppearances:element.dataset.customAppearances??'',remoteManipulations:element.dataset.remoteManipulations??'',humanReady:element.dataset.humanReady??'',humanError:element.dataset.humanError??'',lastChat:element.dataset.lastChat??'',chatBubbles:element.dataset.chatBubbles??'0'}));}
@@ -64,9 +66,9 @@ async function createRoom(page:Page,name:string):Promise<string>{
   catch (error) {
     const roomsText=await page.locator('rooms-page').textContent().catch(()=>null);
     const roomText=await page.locator('online-room-page').textContent().catch(()=>null);
-    throw new Error(`Room creation did not enter game. url=${page.url()} rooms=${JSON.stringify(roomsText?.slice(0,240)??'')} online=${JSON.stringify(roomText?.slice(0,240)??'')} cause=${error instanceof Error?error.message:String(error)}`);
+    throw new Error(`Room creation did not enter game. url=${await page.evaluate(()=>location.href)} rooms=${JSON.stringify(roomsText?.slice(0,240)??'')} online=${JSON.stringify(roomText?.slice(0,240)??'')} cause=${error instanceof Error?error.message:String(error)}`);
   }
-  return new URL(page.url()).pathname;
+  return await page.evaluate(() => location.pathname);
 }
 async function waitRemoteCount(page:Page,count:number):Promise<void>{await waitFor(async()=>Number((await canvasData(page)).remoteActors)===count,8_000,`remote actor count ${count}`);}
 async function enterEdit(page:Page):Promise<void>{const button=game(page).locator('.mode-btn');if((await button.textContent())?.includes('Edit room'))await button.click();}
@@ -76,7 +78,7 @@ const phase=(name:string):void=>console.log(`[online-smoke] ${name}`);
 try {
   if (!existsSync('dist/index.html')) throw new Error('Build dist first with bun run build.');
   if (!process.env.ONLINE_SMOKE_URL) { rmSync(dbPath,{force:true}); rmSync(`${dbPath}-wal`,{force:true}); rmSync(`${dbPath}-shm`,{force:true}); await startServer(); }
-  browser=await chromium.launch({headless:true,executablePath:chromiumPath,args:['--no-sandbox','--disable-dev-shm-usage']});
+  browser=await chromium.launch({headless:true,executablePath:chromiumPath,args:['--no-sandbox','--disable-dev-shm-usage',`--unsafely-treat-insecure-origin-as-secure=${aliceBase},${bobBase}`]});
   const suffix=Date.now().toString().slice(-7), aliceName=`Alice${suffix}`, bobName=`Bob${suffix}`;
   const aliceContext=await browser.newContext({viewport:{width:1440,height:900}}), bobContext=await browser.newContext({viewport:{width:1440,height:900}});
   const alice=await aliceContext.newPage(), bob=await bobContext.newPage();watch(alice,'alice');watch(bob,'bob');
@@ -89,7 +91,8 @@ try {
   await alice.screenshot({path:'artifacts/online-lobby.png',fullPage:true});
   const roomPath=await createRoom(alice,`Open Beta ${suffix}`);
   const roomId=roomPath.split('/').filter(Boolean).at(-1)!;
-  await waitFor(async()=> (await canvasData(alice)).humanReady==='true',8_000,'Alice avatar');
+  try { await waitFor(async()=> (await canvasData(alice)).humanReady==='true',8_000,'Alice avatar'); }
+  catch (error) { throw new Error(`Alice avatar state: ${JSON.stringify(await canvasData(alice))}; browser errors: ${errors.join(' | ')}`, { cause:error }); }
 
   const identity=alice.locator('online-room-page room-identity-card');await identity.waitFor({state:'visible'});
   const identityName=(await identity.locator('.name').textContent())??'',identityCreator=identity.locator('.creator'),identityCreatorText=(await identityCreator.textContent())??'';
@@ -99,13 +102,15 @@ try {
   const roomsDockButton=dock.locator('button[aria-label="Rooms"]');await roomsDockButton.hover();
   if(await dock.getAttribute('data-hovered')!=='rooms')errors.push('dock: Three.js room asset did not enter hover animation state');
   await roomsDockButton.click();const roomBrowser=alice.locator('online-room-page room-browser-panel');await roomBrowser.waitFor({state:'visible'});
-  await waitFor(async()=>((await roomBrowser.locator('.room').filter({hasText:`Open Beta ${suffix}`}).textContent())??'').includes('1 here'),4_000,'room browser initial presence');
+  try { await waitFor(async()=>((await roomBrowser.locator('.room').filter({hasText:`Open Beta ${suffix}`}).textContent())??'').includes('1 here'),4_000,'room browser initial presence'); }
+  catch (error) { throw new Error(`Initial room browser state: count=${await roomBrowser.locator('.room').count()} text=${JSON.stringify((await roomBrowser.textContent())?.slice(0,1200))}`, { cause:error }); }
   await alice.screenshot({path:'artifacts/online-room-shell.png',fullPage:true});
 
-  await signup(bob,bobName);
+  await signup(bob,bobName,bobBase);
   const bobOwned=await api<{room:{id:string;name:string}}>(bob,'/api/rooms',{method:'POST',body:{name:`Bob Room ${suffix}`}});
-  await waitFor(async()=>await roomBrowser.locator('.room').filter({hasText:`Bob Room ${suffix}`}).count()===1,4_000,'room browser live room creation');
-  await bob.goto(`${base}${roomPath}`,{waitUntil:'domcontentloaded'});
+  try { await waitFor(async()=>await roomBrowser.locator('.room').filter({hasText:`Bob Room ${suffix}`}).count()===1,4_000,'room browser live room creation'); }
+  catch (error) { throw new Error(`Room browser after Bob create: ${JSON.stringify((await roomBrowser.textContent())?.slice(0,800))}`, { cause:error }); }
+  await bob.goto(`${bobBase}${roomPath}`,{waitUntil:'domcontentloaded'});
   await game(bob).waitFor({state:'visible',timeout:10_000});
   await waitFor(async()=> (await canvasData(bob)).humanReady==='true',8_000,'Bob avatar');
   await Promise.all([waitRemoteCount(alice,1),waitRemoteCount(bob,1)]);
@@ -254,7 +259,7 @@ try {
   const bobBrowser=bob.locator('online-room-page room-browser-panel');await bobBrowser.waitFor({state:'visible'});
   await alice.locator('online-room-page room-action-dock button[aria-label="Rooms"]').click();const aliceBrowser=alice.locator('online-room-page room-browser-panel');await aliceBrowser.waitFor({state:'visible'});
   await aliceBrowser.locator('.room').filter({hasText:`Bob Room ${suffix}`}).click();
-  await waitFor(()=>new URL(alice.url()).pathname===`/room/${bobOwned.room.id}`,5_000,'in-room browser navigation to another room');
+  await waitFor(async()=>await alice.evaluate(()=>location.pathname)===`/room/${bobOwned.room.id}`,5_000,'in-room browser navigation to another room');
   await game(alice).waitFor({state:'visible',timeout:8_000});await waitFor(async()=>((await alice.locator('online-room-page room-identity-card .name').textContent())??'')===`Bob Room ${suffix}`,5_000,'new room identity after in-room navigation');
   await waitRemoteCount(bob,0);
   await waitFor(async()=>((await bobBrowser.locator('.room').filter({hasText:`Open Beta ${suffix}`}).textContent())??'').includes('1 here'),5_000,'live room browser presence after leaving');

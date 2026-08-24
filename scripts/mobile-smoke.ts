@@ -1,11 +1,11 @@
 import { existsSync, rmSync } from 'node:fs';
-import { chromium, type Page } from 'playwright-core';
+import { chromium, type Page } from './webview-browser';
 
 const port = Number(process.env.MOBILE_SMOKE_PORT ?? 4185);
 const base = process.env.MOBILE_SMOKE_URL ?? `http://127.0.0.1:${port}`;
 const dbPath = process.env.MOBILE_SMOKE_DB ?? `/tmp/roomlab-mobile-smoke-${process.pid}.sqlite`;
 let server: ReturnType<typeof Bun.spawn> | null = null;
-const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH ?? '/usr/bin/chromium', args: ['--no-sandbox', '--use-angle=swiftshader'] });
+const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH, args: ['--no-sandbox', '--use-angle=swiftshader'] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
 const errors: string[] = [];
@@ -97,8 +97,13 @@ try {
   if (lobbyBefore.sw > lobbyBefore.w + 1) errors.push(`lobby: horizontal overflow ${lobbyBefore.sw}px > ${lobbyBefore.w}px`);
   await page.screenshot({ path: 'artifacts/mobile-lobby.png' });
 
-  await page.locator('lobby-shell .nav button').filter({ hasText: 'Rooms' }).click(); await page.locator('rooms-page button.primary').filter({ hasText: 'New room' }).click();
-  await page.locator('rooms-page input[name=name]').fill('Mobile Room'); await page.locator('rooms-page form.create button.primary').click(); await game().waitFor({ state: 'visible', timeout: 12_000 }); await wait(async () => (await data()).human === 'true', 'human');
+  await page.locator('lobby-shell .nav button').filter({ hasText: 'Rooms' }).click();
+  await page.locator('rooms-page').waitFor({ state: 'visible' });
+  const newRoom = page.locator('rooms-page button.primary').filter({ hasText: 'New room' });
+  const roomName = page.locator('rooms-page input[name=name]');
+  await newRoom.click();
+  try { await roomName.waitFor({ state: 'visible', timeout: 2_000 }); } catch { await newRoom.click(); await roomName.waitFor({ state: 'visible' }); }
+  await roomName.fill('Mobile Room'); await page.locator('rooms-page form.create button.primary').click(); await game().waitFor({ state: 'visible', timeout: 12_000 }); await wait(async () => (await data()).human === 'true', 'human');
   const canvasCss = await canvas().evaluate((element: HTMLElement) => ({ touch: getComputedStyle(element).touchAction, w: element.getBoundingClientRect().width, h: element.getBoundingClientRect().height, scrollY }));
   const start = await data(); const target = await walkTarget(start.cell); await page.touchscreen.tap(target.x, target.y); await wait(async () => { const next = await data(); return next.cell === target.cell && next.pose === 'stand'; }, 'tap walk');
   const scale0 = await page.evaluate(() => visualViewport?.scale ?? 1); await page.touchscreen.tap(target.x, target.y); await page.waitForTimeout(80); await page.touchscreen.tap(target.x, target.y); await page.waitForTimeout(250); const scale1 = await page.evaluate(() => visualViewport?.scale ?? 1);

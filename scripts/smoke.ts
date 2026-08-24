@@ -1,9 +1,9 @@
-import { chromium, type Browser, type ConsoleMessage, type Page } from 'playwright-core';
+import { chromium, type Browser, type ConsoleMessage, type Page } from './webview-browser';
 
 const port = 4173;
 const externalUrl = process.env.SMOKE_URL;
 const url = externalUrl ?? `http://127.0.0.1:${port}/room-smoke.html`;
-const chromiumPath = process.env.CHROMIUM_PATH ?? '/usr/bin/chromium';
+const chromiumPath = process.env.CHROMIUM_PATH;
 const errors: string[] = [];
 let server: ReturnType<typeof Bun.spawn> | null = null;
 let browser: Browser | null = null;
@@ -231,10 +231,14 @@ try {
 
   const search = catalogue.locator('input[type="search"]');
   await search.fill('Mint Sofa');
-  await page.waitForFunction(() => {
-    const catalogue = document.querySelector('habbo-game')?.shadowRoot?.querySelector('catalogue-explorer');
-    return catalogue?.shadowRoot?.querySelectorAll('.object-card').length === 1;
-  }, undefined, { timeout: 2_000 });
+  const searchDeadline = Date.now() + 2_000;
+  while (await catalogue.locator('.object-card').count() !== 1) {
+    if (Date.now() > searchDeadline) {
+      const debug = await catalogue.evaluate((element: any) => ({ search: element.search, cards: element.shadowRoot?.querySelectorAll('.object-card').length, value: element.shadowRoot?.querySelector('input[type="search"]')?.value }));
+      throw new Error(`Catalogue search did not settle to one result: ${JSON.stringify(debug)}`);
+    }
+    await Bun.sleep(50);
+  }
   if (await catalogue.locator('.object-card').count() !== 1) errors.push('Catalogue search: expected one Mint Sofa result');
   await search.fill('');
   const placementPlane = catalogue.locator('.placement-plane');
@@ -301,7 +305,9 @@ try {
   expectText(await host.locator('.selection-panel .title').textContent(), 'Ceramic Vase', 'dragging stacked decor selects the vase');
   await host.locator('.selection-panel .danger').click();
   await page.waitForTimeout(80);
-  await page.mouse.click(sofaTarget.x, sofaTarget.y);
+  const sofaSelectionPoint = await host.evaluate((game: any) => game.debugScreenPointForPrototype('sofa')) as { x: number; y: number } | null;
+  if (!sofaSelectionPoint) throw new Error('Stacking: sofa did not produce a selection point after vase pickup.');
+  await page.mouse.click(sofaSelectionPoint.x, sofaSelectionPoint.y);
   await page.waitForTimeout(40);
   expectText(await host.locator('.selection-panel .title').textContent(), 'Mint Sofa', 'sofa remains after vase pickup');
   await host.locator('.catalogue-open').click();

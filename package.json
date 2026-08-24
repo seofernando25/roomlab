@@ -17,12 +17,12 @@
     "visual:qa:fresh": "bun run smoke && bun run visual:qa",
     "visual:qa:gate": "VISUAL_QA_GATE=1 bun run visual:qa",
     "check": "bun run test && bun run build",
-    "verify": "bun run check && bun run smoke && bun run smoke:mobile"
+    "verify": "bun run check && bun run smoke && bun run smoke:mobile && bun run smoke:online",
+    "smoke:online": "bun run scripts/online-smoke.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/three": "^0.185.4",
-    "playwright-core": "^1.62.1",
     "typescript": "^7.0.2",
     "vite": "^8.2.1"
   },
